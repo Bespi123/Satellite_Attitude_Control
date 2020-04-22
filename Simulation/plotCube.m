@@ -19,10 +19,11 @@ faces_matrix = [1 2 6 5
 subplot(1,3,1)
 axis([-1 1 -1 1 -1 1]);
 axis equal off;
-cube = patch('Vertices',vertex_matrix,'Faces',faces_matrix,'FaceColor', 'green');
+cube = patch('Vertices',vertex_matrix,'Faces',faces_matrix,'FaceColor','blue','FaceAlpha',.5);
+rotate(cube,[0,0,1], yaw);
 rotate(cube,[1,0,0], roll);
 rotate(cube,[0,1,0], pitch);
-rotate(cube,[0,0,1], yaw);
+
 view(0,0);
  
 end
