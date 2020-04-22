@@ -1,4 +1,4 @@
-function [x_dot] = Equation_state(Ux,Uy,Uz,Ix,Iy,Iz,x1_x,x1_y,x1_z,x2_x,x2_y,x2_z)
+function [x_dot] = Equation_state_quat(Ux,Uy,Uz,Ix,Iy,Iz,x1_x,x1_y,x1_z,x2_x,x2_y,x2_z)
 %x1= vectores de actitud
 x2=[x2_x,x2_y,x2_z]';   %Velocidades angulares [wx,wy,wz]';
 U=[Ux,Uy,Uz]';          %Torque de entrada
