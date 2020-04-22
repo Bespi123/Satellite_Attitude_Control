@@ -1,0 +1,16 @@
+function [x_dot] = Equation_state(Ux,Uy,Uz,Ix,Iy,Iz,x1_x,x1_y,x1_z,x2_x,x2_y,x2_z)
+
+%Segun libro Attitude Kinematicas Equations of motion for nonspining
+%spacecraft 3->2->1
+%Singularidad en pitch=90°
+A=[1,0,-sin(theta);
+     0,cos(phi),cos(theta)*sin(phi);
+     0,-sin(phi),cos(theta)*cos(phi)];
+
+U=[Ux,Uy,Uz]';          %Torque de entrada
+J=diag([Ix,Iy,Iz]);     %Tensor de inercia diagonal
+x1_dot=inv(A)*x2;       %
+x2_dot=inv(J)*(U-cross(x2,I*x2)); %...Ecuacion dinamica (3.81)
+x_dot=[x1_dot;x2_dot];
+end
+
