@@ -4,7 +4,8 @@ x2=[x2_x,x2_y,x2_z]';   %Velocidades angulares [wx,wy,wz]';
 U=[Ux,Uy,Uz]';          %Torque de entrada
 J=diag([Ix,Iy,Iz]);     %Tensor de inercia diagonal
 %-----------------Ecuación cinematica---------------------------------
-%spacecraft 3->2->1 
+%Libro: Fundamentals of Spacecraft Attitude Determination and Control
+%Autor: F. Landis Markley & John L. Crassidis
 %Singularidad en pitch=90° (tomando x1_x->yaw,x1_y->pitch,x1_z->roll)
 % B=[0,sec(x1_y)*sin(x1_z),sec(x1_y)*cos(x1_z);
 %     0,cos(x1_z),-sin(x1_z);
