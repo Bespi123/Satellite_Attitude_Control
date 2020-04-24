@@ -1,5 +1,5 @@
 function [x_dot] = Equation_state_quat(Ux,Uy,Uz,Ix,Iy,Iz,q0,q1,q2,q3,x2_x,x2_y,x2_z)
-%x1= vectores de actitud
+%q0,q1,q2,q3 cuaternos de actitud
 x2=[x2_x,x2_y,x2_z]';   %Velocidades angulares [wx,wy,wz]';
 U=[Ux,Uy,Uz]';          %Torque de entrada
 J=diag([Ix,Iy,Iz]);     %Tensor de inercia diagonal

@@ -21,6 +21,6 @@ x2_dot=inv(J)*(Td-2*U-cross(x2,J*x2+x4));   %Ecuación dinámica (3.147)
 x3_dot=(inv(R)*U)-x2_dot;                   %Ecuación de Ruedas de reacción (Rw)
 x4_dot=U;                                   %Ecuación de velocidad angular
 %-----------------Vector x_dot---------------------------------------------
-x_dot=[x1_dot;x2_dot;x3_dot;x4_dot];
+x_dot=[x1_dot,x2_dot,x3_dot,x4_dot];
 end
 
