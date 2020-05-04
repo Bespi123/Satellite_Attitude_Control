@@ -7,16 +7,16 @@ J=diag([Ix,Iy,Iz]);     %Tensor de inercia diagonal
 %Libro: Fundamentals of Spacecraft Attitude Determination and Control
 %Autor: F. Landis Markley & John L. Crassidis
 %Cinemática de cuaternos..Ecuación (2.88)
-% Xi=[-q1,-q2,-q3;
-%     q0,-q3,-q2;
-%     -q3,q0,q1;
-%     q2,-q1,q0];           
+Xi=[-q1,-q2,-q3;
+    q0,-q3,q2;
+    q3,q0,-q1;
+    -q2,q1,q0];           
 %Ecuacion 2.88 modificada ya que el libro considera roll->z,pitch->y,yaw->x
 %Se modificó para considerar roll->x,pitch->z,yaw->z
-Xi=[-q3,-q2,-q1;             
-    q2,-q3,q0;               
-    -q1,q0,q3;               
-    q0,-q1,-q2];             
+% Xi=[-q3,-q2,-q1;             
+%     q2,-q3,q0;               
+%     -q1,q0,q3;               
+%     q0,-q1,-q2];             
 x1_dot=1/2*Xi*x2;            %Ecuación cinemática (3.21)
 x2_dot=inv(J)*(U-cross(x2,J*x2));   %Ecuacion dinamica (3.81)
 x_dot=[x1_dot;x2_dot];              %Vector de estados
