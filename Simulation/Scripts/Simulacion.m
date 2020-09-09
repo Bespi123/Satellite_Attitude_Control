@@ -18,9 +18,9 @@ close all;
     c=0.8795*10^(-3);                   %Frincción de Coulumb
     d=0.9055*10^(-3)-c;                 %Starting torque
     ws=0.418;                           %Velocidad de Stribeck
-%      b=0;                     %coeficiende de fricción viscosa
-%      c=0;                   %Frincción de Coulumb
-%      d=0;                 %Starting torque
+      b=0;                     %coeficiende de fricción viscosa
+      c=0;                   %Frincción de Coulumb
+      d=0;                 %Starting torque
     Irw_per=(1/4)*m_rw*r_rw^2+(1/12)*m_rw*d_rw^2;
     Irw_par=(1/2)*m_rw*r_rw^2;
 %*********************Parametros de desalineaciones**********************
@@ -63,7 +63,7 @@ close all;
 %**                   Boskovic Adaptive Controller                     **
 %************************************************************************ 
     gamma=0.001;
-    delta=1;
+    delta=0.01;
     k=1;
 %************************************************************************
 %**                   Dando Adaptive Controller                     **
