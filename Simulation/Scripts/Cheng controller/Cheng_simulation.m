@@ -61,11 +61,12 @@ function [angArray,xArray,uiArray,TdArray,L_dArray,EULERINT,ASCCT,T,ts] = Cheng_
         ui=Cheng_controller(J_est,dq,dq_dot,x(5:7),Wd,Wd_dot,Beta_dot,c,zeta,falpha1,falpha2,fko,ftao1,ftao2,frho,fk3,fk4,fgamma1,fn,fgamma);
         T(i)=toc;
         ui=ui*-1;
-        for j=1:3
-            if (abs(ui(j))>Umax)
-                ui(j)=sign(ui(j))*Umax;
-            end
-        end       
+        ui=sat(Umax,fa,ui);
+%         for j=1:3
+%             if (abs(ui(j))>Umax)
+%                 ui(j)=sign(ui(j))*Umax;
+%             end
+%         end       
         ui=eye(3)*(ui)+deltaD*(ui);
         ang=quat2eul(x(1:4)')';
         if sum(abs(quat2eul(qd')'-ang)< 0.05*quat2eul(qd')')==3 && ok==0
