@@ -24,11 +24,12 @@ function [angArray,xArray,uiArray,TdArray,L_dArray,EULERINT,ASCCT,T,ts] = Boskov
         %Torque por gradiente de gravedad
         Tgg=T_disturbances(rc,J_tilde,Irw_per,x(1:4));
         %Torque por fricción de ruedas de reacción
-        L_d=b*x(8:10)+sign(x(8:10))*(c+d*exp(-(x(8:10)/ws)'*(x(8:10)/ws)));
-        %L_d=[0,0,0]';
+        %L_d=b*x(8:10)+sign(x(8:10))*(c+d*exp(-(x(8:10)/ws)'*(x(8:10)/ws)));
+        L_d=[0,0,0]';
+        %Miscellaneous torque
+        L_mis=0.7*[sin(1*t(i)),2*sin(2*t(i)),3*sin(3*t(i))]'*10^(-3);
         %Disturbio de torques
-        Td=Tgg-L_d;
-        %Td=Td;
+        Td=Tgg-L_d+L_mis;
         %Empezamos en RK 4 de cuarto orden
             g1=dt*Equation_state_rw(Td,Irw_per,Irw_par,J_tilde,ui,x);
             g2=dt*Equation_state_rw(Td,Irw_per,Irw_par,J_tilde,ui,x+0.5.*g1);

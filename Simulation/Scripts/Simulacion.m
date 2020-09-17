@@ -3,8 +3,8 @@ clear
 close all;
 % For a rigid body Satellite
 % ********************Simulation control parameters**********************
-    n=20000;    %numero de iteraciones
-    Tf=50;     %tiempo final
+    n=100000;    %numero de iteraciones
+    Tf=200;      %tiempo final
 %********************* Parametros del modelo*****************************
     J_tilde=[8.46,8.5,8.33,1.1,1.5,1.6]*10^(-3); %Tensor de inercia real
     J_est=[1,1,1,0,0,0];               %Tensor de inercia estimado
