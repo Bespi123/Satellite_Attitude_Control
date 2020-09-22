@@ -27,7 +27,8 @@ function [angArray,xArray,uiArray,TdArray,L_dArray,EULERINT,ASCCT,T,ts] = Feedba
         %L_d=b*x(8:10)+sign(x(8:10))*(c+d*exp(-(x(8:10)/ws)'*(x(8:10)/ws)));
         L_d=[0,0,0]';
         %Miscellaneous torque
-        L_mis=0.7*[sin(1*t(i)),2*sin(2*t(i)),3*sin(3*t(i))]'*10^(-3);
+        %L_mis=0.7*[sin(1*t(i)),2*sin(2*t(i)),3*sin(3*t(i))]'*10^(-3);
+        L_mis=[0,0,0]';
         %Disturbio de torques
         Td=Tgg-L_d+L_mis;
         %Td=Td;
@@ -55,7 +56,10 @@ function [angArray,xArray,uiArray,TdArray,L_dArray,EULERINT,ASCCT,T,ts] = Feedba
                 ok=1;
         end 
         %Calculando EULERINT
-        eulerang=2*acos(dq1(1));
+        dqq=eul2quat(pi/180*[10,20,30]-ang');
+        %eulerang=2*acos(dq(1));
+        eulerang=2*acos(dqq(1));
+        
         %Integración por metodo de Simpson de segundo orden
             euint=euint_ant+dt/6*(euler_ant+2*(euler_ant+eulerang)+eulerang);
         %Final de la integración por metodo de Simpson 

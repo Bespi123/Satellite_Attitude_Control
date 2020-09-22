@@ -7,7 +7,11 @@ close all;
     Tf=200;      %tiempo final
 %********************* Parametros del modelo*****************************
     J_tilde=[8.46,8.5,8.33,1.1,1.5,1.6]*10^(-3); %Tensor de inercia real
-    J_est=[1,1,1,0,0,0];               %Tensor de inercia estimado
+    J_est=[1,1,1,0,0,0];               %Tensor de inercia estimado%\begin{equation}
+%\label{eq_simpson}
+%    \int_{t_1}^{t_2}f(t)dt\approx\frac{dt}{6}\left[f(t_1)+4f\left(\frac{t_1+t_2}{2}\right)+f(t_2)\right]
+%\end{equation}
+
     Sat=1.343*10^(-2);                 %Limites de saturación
 %********************* Parametros ruedas de reacción*********************  
     rc=(6371+100)*10^(3);               %Distancia desde centro de la tierra
@@ -77,7 +81,7 @@ close all;
     falpha1=1;
     falpha2=0.5;
     fko=0.0005;
-    ftao1=10;                   %Positiva
+    ftao1=50;                   %Positiva
     ftao2=10;                   %Positiva
     frho=0.7;                   
     fzeta_o=0.0001;             %Positiva
@@ -169,35 +173,35 @@ figure(3)
     ylabel('Control Torque(Nm)');
     legend('X','Y','Z')
 figure(5)
- subplot(3,1,1);plot(t(1:n-1),[TdArray1(1,:);TdArray2(1,:);TdArray3(1,:);TdArray4(1,:)])
+ subplot(3,1,1);plot(t(1:n-2),[TdArray1(1,2:end);TdArray2(1,2:end);TdArray3(1,2:end);TdArray4(1,2:end)])
     grid on
     xlabel('Time(s)');
     ylabel('X (Nm)');
     legend('Quaternion Feedback Controller','Boskovic Robust Controller','Dando Adaptive Controller','Chen Robust Controller');
     title('Gravity gradient torque simulated')
- subplot(3,1,2);plot(t(1:n-1),[TdArray1(2,:);TdArray2(2,:);TdArray3(2,:);TdArray4(2,:)])
+ subplot(3,1,2);plot(t(1:n-2),[TdArray1(2,2:end);TdArray2(2,2:end);TdArray3(2,2:end);TdArray4(2,2:end)])
     grid on
     xlabel('Time(s)');
     ylabel('Y (Nm)');
     %legend('Quaternion Feedback Controller','Boskovic Robust Controller','Dando Adaptive Controller','Chen Robust Controller');
- subplot(3,1,3);plot(t(1:n-1),[TdArray1(3,:);TdArray2(3,:);TdArray3(3,:);TdArray4(3,:)])
+ subplot(3,1,3);plot(t(1:n-2),[TdArray1(3,2:end);TdArray2(3,2:end);TdArray3(3,2:end);TdArray4(3,2:end)])
     grid on
     xlabel('Time(s)');
     ylabel('Z (Nm)');
     %legend('Quaternion Feedback Controller','Boskovic Robust Controller','Dando Adaptive Controller','Chen Robust Controller');
 figure(6)
- subplot(3,1,1);plot(t(1:n-1),[L_dArray1(1,:);L_dArray2(1,:);L_dArray3(1,:);L_dArray4(1,:)])
+ subplot(3,1,1);plot(t(1:n-2),[L_dArray1(1,2:end);L_dArray2(1,2:end);L_dArray3(1,2:end);L_dArray4(1,2:end)])
     grid on
     xlabel('Time(s)');
     ylabel('X (Nm)');
     legend('Quaternion Feedback Controller','Boskovic Robust Controller','Dando Adaptive Controller','Chen Robust Controller');
     title('Reaction wheel drag')
- subplot(3,1,2);plot(t(1:n-1),[L_dArray1(2,:);L_dArray2(2,:);L_dArray3(2,:);L_dArray4(1,:)])
+ subplot(3,1,2);plot(t(1:n-2),[L_dArray1(2,2:end);L_dArray2(2,2:end);L_dArray3(2,2:end);L_dArray4(1,2:end)])
     grid on
     xlabel('Time(s)');
     ylabel('Y (Nm)');
     %legend('Quaternion Feedback Controller','Boskovic Robust Controller','Dando Adaptive Controller','Chen Robust Controller');
- subplot(3,1,3);plot(t(1:n-1),[L_dArray1(3,:);L_dArray2(3,:);L_dArray3(3,:);L_dArray4(3,:)])
+ subplot(3,1,3);plot(t(1:n-2),[L_dArray1(3,2:end);L_dArray2(3,2:end);L_dArray3(3,2:end);L_dArray4(3,2:end)])
     grid on
     xlabel('Time(s)');
     ylabel('Z (Nm)');
@@ -249,7 +253,7 @@ figure(8)
  disp('Error estacionario (Quaternion Feedback Controller): ');disp(180/pi*angArray1(:,end)-[10,20,30]');
  disp('Error estacionario (Boskovic Robust Controller): ');disp(180/pi*angArray2(:,end)-[10,20,30]');
  disp('Error estacionario (Dando Adaptive Controller):');disp(180/pi*angArray3(:,end)-[10,20,30]');
- disp('Error estacionario (Chen Robust Controller):');disp(180/pi*angArray3(:,end)-[10,20,30]');
+ disp('Error estacionario (Chen Robust Controller):');disp(180/pi*angArray4(:,end)-[10,20,30]');
    
 
 
