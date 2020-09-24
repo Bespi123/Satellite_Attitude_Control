@@ -212,41 +212,40 @@ if(sta_procs==1){
   sta_procs=0;    
 }
    
-   // Lectura de datos de PC ********************************** 
-   if(Serial5.available()>0)
-   {
-     // Recepcion de datos 
-     Serial5.readBytes(dataofPC,10);
-
-     // DECODIFICACION DE TRAMA DE DATOS
-     // Datos de dirección para Motor 1
-     if(dataofPC[3]==16) digitalWrite(pin_dir_M1,HIGH);
-      else  digitalWrite(pin_dir_M1,LOW); 
+//Read data from PC
+if(Serial5.available()>0){ 
+  Serial5.readBytes(dataofPC,10);
+  // DECODIFICATION FRAME
+  // Data direction to Motor 1
+  if(dataofPC[3]==16) digitalWrite(pin_dir_M1,HIGH);
+  else  digitalWrite(pin_dir_M1,LOW); 
       
-     // Dato de dirección para Motor 2
-     if(dataofPC[6]==16) digitalWrite(pin_dir_M1,HIGH);
-      else  digitalWrite(pin_dir_M1,LOW);
+  // Data de direction to Motor 2
+  if(dataofPC[6]==16) digitalWrite(pin_dir_M1,HIGH);
+  else  digitalWrite(pin_dir_M1,LOW);
 
-     // Datos de dirección para Motor 3
-     if(dataofPC[9]==16) digitalWrite(pin_dir_M1,HIGH);
-      else  digitalWrite(pin_dir_M1,LOW);
+  // Data direction to Motor 3
+  if(dataofPC[9]==16) digitalWrite(pin_dir_M1,HIGH);
+  else  digitalWrite(pin_dir_M1,LOW);
 
-     // Dato de ON/OFF de motores y PWM de motores
-     if((dataofPC[0])== 224){
-        pwm_M1= dataofPC[2]*100+dataofPC[1];
-        analogWrite(pin_PWM_M1, pwm_M1);
-        pwm_M2= dataofPC[5]*100+dataofPC[4];
-        analogWrite(pin_PWM_M2, pwm_M2);
-        pwm_M3= dataofPC[8]*100+dataofPC[7];
-        analogWrite(pin_PWM_M3, pwm_M3);                
-        }
-      if((dataofPC[0])== 239){
-        // Se apaga motores
-        analogWrite(pin_PWM_M1,255);
-        analogWrite(pin_PWM_M2,255);
-        analogWrite(pin_PWM_M3,255);
-      }
+   // Recived PWM from reaction wheels
+   if((dataofPC[0])== 224){
+      pwm_M1= dataofPC[2]*100+dataofPC[1];
+      analogWrite(pin_PWM_M1, pwm_M1);
+      pwm_M2= dataofPC[5]*100+dataofPC[4];
+      analogWrite(pin_PWM_M2, pwm_M2);
+      pwm_M3= dataofPC[8]*100+dataofPC[7];
+      analogWrite(pin_PWM_M3, pwm_M3);                
     }
+
+    //ON/OFF Reaction wheels
+    if((dataofPC[0])== 239){
+      // Turn off motors
+      analogWrite(pin_PWM_M1,255);
+      analogWrite(pin_PWM_M2,255);
+      analogWrite(pin_PWM_M3,255);
+    }
+}
 }
 
 /***************************************************************************************
