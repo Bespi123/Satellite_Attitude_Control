@@ -1,34 +1,45 @@
-///////////////////////////////////////////////////////////////////////////////////
-//                                      TESIS                                    //
-//             Diseño e Implementacion de plataforma de pruebas para             //
-//             control y determinacion de actitud de picosatelite                //
-//                                     CubeSat                                   //
-//                       Autor: Hammerly Mamani Valencia                         //
-///////////////////////////////////////////////////////////////////////////////////
-///////////////////////////////////////////////////////////////////////////////////
-//                                Programa                                       //
-//                           Monitoreo de CubeSat                                //
-///////////////////////////////////////////////////////////////////////////////////
-///////////////////////////////////////////////////////////////////////////////////
-//  LIBRERIAS  ////////////////////////////////////////////////////////////////////
+/************************************************************************************
+ * TESIS: Design and Implementation of test platform for control and determination of 
+ * picosatelite attitude CubeSat
+ * PROGRAM NAME: Cubesat monitoring v7
+ * DESCRIPTION: XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX
+ * 
+ * AUTHOR: Ing. Hammerly Mamani Valencia
+ * 
+ * DEPENDENCIES:
+ * - Wire
+ * - stdint
+ * - stdbool 
+ * - inc/hw_ints.h, and others than can be obtained in:
+ *   https://github.com/energia/Energia/tree/master/hardware/cc2600emt/cores/cc2600emt
+ */
+
+/***************************************************************************************
+ **                              Libraries and dependencies                           ** 
+ ***************************************************************************************
+ */
 #include <Wire.h>
 #include <stdint.h>
 #include <stdbool.h>
-//#include "inc/hw_ints.h"
-//#include "inc/hw_memmap.h"
-//#include "inc/hw_types.h"
-//#include "driverlib/debug.h"
-//#include "driverlib/gpio.h"
-//#include "driverlib/interrupt.h"
-//#include "driverlib/rom_map.h"
-//#include "driverlib/rom.h"
-//#include "driverlib/sysctl.h"
-//#include "driverlib/timer.h"
-///////////////////////////////////////////////////////////////////////////////////
+#include "inc/hw_ints.h"
+#include "inc/hw_memmap.h"
+#include "inc/hw_types.h"
+#include "driverlib/debug.h"
+#include "driverlib/gpio.h"
+#include "driverlib/interrupt.h"
+#include "driverlib/rom_map.h"
+#include "driverlib/rom.h"
+#include "driverlib/sysctl.h"
+#include "driverlib/timer.h"
 
-//  DEFINICION DE IDENTIFICADORES  ////////////////////////////////////////////////
-#define  MPU6050_ADDRESS   0x68
-#define  MAGNET_ADDRESS    0x0C
+
+/***************************************************************************************
+ **                              Program definitions                                  ** 
+ ***************************************************************************************
+ */
+ 
+#define  MPU6050_ADDRESS   0x68                               //MPU6050 I2C address
+#define  MAGNET_ADDRESS    0x0C                               //
 
 #define  PWR_MGMT_1    0x00 
 #define  INT_PIN_CFG   0x02
