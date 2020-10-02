@@ -91,7 +91,7 @@ lambda=1;               %Learning rate
 Kd=1;                   %Gain
 theta=[1,1,1,0,0,0]';   %Initial condition for the estimated inertia error
 
-% Cheg Robust Controller (Difficult to tune)
+% Chen Robust Controller (Difficult to tune)
 falpha1=1;
 falpha2=0.5;
 fko=0.0005;
