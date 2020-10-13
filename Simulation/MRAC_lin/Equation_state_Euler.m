@@ -1,4 +1,5 @@
-function [x_dot] = Equation_state_Euler(Td,U,Irw_per,Irw_par,J_tilde,x)
+%function [x_dot] = Equation_state_Euler(Td,U,Irw_per,Irw_par,J_tilde,x)
+function [x_dot] = Equation_state_Euler(entr)
 %----------------------Definiendo variables--------------------------------
 %   Td: Torque de(disturbios)
 %   U: Torque de entrada (torque de ruedas de reaccion)
@@ -10,14 +11,16 @@ function [x_dot] = Equation_state_Euler(Td,U,Irw_per,Irw_par,J_tilde,x)
 %   Wrw: Velocidades angulares de ruedas de reacción
 
 %-----------------------------Calculos-------------------------------------
-Td=[Td(1),Td(2),Td(3)]';
-U=[U(1),U(2),U(3)]';
-Euler=[x(1),x(2),x(3)]';
-w=[x(4),x(5),x(6)]';
-Wrw=[x(7),x(8),x(8)]';
-J_tilde=[J_tilde(1),J_tilde(4),J_tilde(5);
-         J_tilde(4),J_tilde(2),J_tilde(6);
-         J_tilde(5),J_tilde(6),J_tilde(3)];
+Td=[entr(1),entr(2),entr(3)]';
+U=[entr(4),entr(5),entr(6)]';
+Irw_per=entr(7);
+Irw_par=entr(8);
+Euler=[entr(15),entr(16),entr(17)]';
+w=[entr(18),entr(19),entr(20)]';
+Wrw=[entr(21),entr(22),entr(23)]';
+J_tilde=[entr(9),entr(12),entr(13);
+         entr(12),entr(10),entr(14);
+         entr(13),entr(14),entr(11)];
 R=diag(Irw_par*ones(1,3));             %Matriz de inercias paralelas
 J=J_tilde+diag(2*Irw_per*ones(1,3));   %Tensor de inercia general
 
