@@ -1,4 +1,4 @@
-%function [x_dot] = Equation_state_Euler(Td,U,Irw_per,Irw_par,J_tilde,x)
+
 function [x_dot] = Equation_state_Euler(entr)
 %----------------------Definiendo variables--------------------------------
 %   Td: Torque de(disturbios)
