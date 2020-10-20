@@ -3,7 +3,7 @@ function [Sat] = sat(Umax,a,u)
     for i=1:3
         if u(i)>= (Umax-a)
             Sat(i)=(Umax-a)+a*tanh((u(i)-Umax+a)/a);
-        elseif (a-Umax) < u(i)
+        elseif ((a-Umax) < u(i)) && (u(i)<(Umax-a))
             Sat(i)=u(i);
         else
             Sat(i)=(a-Umax)+a*tanh((u(i)+Umax-a)/a);
