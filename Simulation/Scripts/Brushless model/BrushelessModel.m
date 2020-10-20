@@ -8,7 +8,7 @@
 %
 % *************************************************************************
 
-function [x_dot] = BrushelessModel(kt,J,B,Kc,L,R,Ke,Tcte,u,x)
+function [x_dot,y] = BrushelessModel(t,x,u,kt,J,B,Kc,L,R,Ke,varargin)
 %Define inputs
 %u:     Vpwm (Vmean)
 %kt:    Torque constant (N*m/A)
@@ -19,6 +19,7 @@ function [x_dot] = BrushelessModel(kt,J,B,Kc,L,R,Ke,Tcte,u,x)
 %L:     Inductancia (H)
 %R:     Resistencia (R)
 %Tcte:  Torque de la carga
+Tcte=0;
 w=x(1);   %Reaction wheel angular rate
 i=x(2);   %Reaction wheel current face
 
@@ -28,6 +29,9 @@ i_dot=1/L*(u-R*i-Ke*w);
 
 %x_dot vector
 x_dot=[w_dot,i_dot]';
+
+%Output equation (Angular rate)
+y=x(1);
 
 end
 
