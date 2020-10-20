@@ -1,58 +1,89 @@
 //Current sensor Pins
 #define Sensor_IM1  28
-#define Sensor_IM2  27
-#define Sensor_IM3  26
 
 //Reaction Wheels PWM Pins
-#define pin_PWM_M1  3
-#define pin_PWM_M2  39
-#define pin_PWM_M3  38
+#define pin_PWM_M1  4
 
 //Reaction Wheels direction pines
-#define pin_dir_M1  2
-#define pin_dir_M2  12
-#define pin_dir_M3  11
+#define pin_dir_M1  3
 
 //Reaction Wheel ecoder Pines
-#define pin_enc_M1  36
-#define pin_enc_M2  35
-#define pin_enc_M3  33
+#define pin_enc_M1  2
 
 //Debug flag
 #define DEBUG true
 
+#include <SD.h>
+#include <SPI.h>
+
+const int chipSelect = 53;
+bool UpDown = false;
+int i=0;
+int n=0;
+int cuentas1=0;
+
 void setup() {
 // Define inputs and outputs
 Serial.begin(9600);
+Serial.print("Initializing SD card...");
+
+// See if the card is present and can be initialized:
+if (!SD.begin(chipSelect)) {
+Serial.println("Card failed, or not present");
+}
+Serial.println("card initialized.");
+
+// Initialize Inputs and outPuts
 pinMode(pin_PWM_M1,OUTPUT);
 pinMode(pin_dir_M1,OUTPUT);
+pinMode(Sensor_IM1,INPUT);
+pinMode(pin_enc_M1,INPUT);
+attachInterrupt(digitalPinToInterrupt(pin_enc_M1), ISR, RISING)
 }
 
 void loop() {
-  Serial.println("CW");
-  digitalWrite(pin_dir_M1,HIGH);
-  for(int i=255;i>0;i=i-50){
-    Serial.println(i);
-    analogWrite(pin_PWM_M1,i);
-    delay(3000);
+  
+// Performing trapezoidal wave form
+  if(i<255 && UpDown == false){
+    i++;
+  } else if (i==255 && UpDown == false){
+    i=255;
+    n++;
+    if (n==255){
+      n=0;
+      UpDown=true;
+    }
+  } else if (UpDown==true && i>0){
+    i--;
+  } else if (UpDown==true && i==0) {
+    i=0;
+    n++;
+    if (n==255){
+      n=0;
+      UpDown=false;
+    }
   }
-  for(int i=0;i<255;i=i+50){
-    Serial.println(i);
-    analogWrite(pin_PWM_M1,i);
-    delay(3000);
-  }
-  delay(1000);
-  Serial.println("CCW");
-  digitalWrite(pin_dir_M1,LOW);
-  for(int i=255;i>0;i=i-50){
-    Serial.println(i);
-    analogWrite(pin_PWM_M1,i);
-    delay(3000);
-  }
-  for(int i=0;i<255;i=i+50){
-    Serial.println(i);
-    analogWrite(pin_PWM_M1,i);
-    delay(3000);
-  }
-delay(1000);
+
+// Read angular velocity
+
+  
+  Serial.println(i);
+
+// open the file. note that only one file can be open at a time,
+// so you have to close this one before opening another.
+//File dataFile = SD.open("datalog.txt", FILE_WRITE);
+
+// if the file is available, write to it:
+//if (dataFile) {
+//  dataFile.print(i);
+//  dataFile.print(",");
+//  dataFile.close();
+  // print to the serial port too:
+//  Serial.println(dataString);
+//}
+}
+
+void ISR(){
+if ((digitalRead(pin_enc_M1)))
+       cuentas1++;                 //Increase counter  
 }
