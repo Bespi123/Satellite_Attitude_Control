@@ -88,9 +88,11 @@ if ((digitalRead(pin_enc_M1)))
  */
 int getSensorASC712(byte pin_sensor, byte samplesNumber)
 {
+  
    long corrienteSum = 0;
    int corriente;
    int voltaje;
+ 
    if((analogRead(pin_sensor))>3105){
    for (int j = 0; j < samplesNumber; j++)
    {
@@ -101,6 +103,7 @@ int getSensorASC712(byte pin_sensor, byte samplesNumber)
    }
    else corriente=0;
   return (corriente); 
+
 }
 
 /***************************************************************************************
