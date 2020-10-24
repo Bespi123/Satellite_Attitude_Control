@@ -93,15 +93,14 @@ int getSensorASC712(byte pin_sensor, byte samplesNumber)
    int corriente;
    int voltaje;
  
-   if((analogRead(pin_sensor))>3105){
+   //if((analogRead(pin_sensor))>3105){
    for (int j = 0; j < samplesNumber; j++)
    {
       voltaje = ((analogRead(pin_sensor))*3300)/ 4095;  // Convertir LSB a voltaje
       corrienteSum += (voltaje - 2500)/sensibi_ACS712;  // Corriente [mA]
    }
   corriente= corrienteSum/samplesNumber;
-   }
-   else corriente=0;
+  //} else corriente=0;
   return (corriente); 
 
 }
@@ -137,7 +136,7 @@ MAP_TimerEnable(TIMER0_BASE, TIMER_A);
 void loop() {
   
 if(sta_procs==1){
-  
+  /*
   // Performing trapezoidal wave form
   if(i<255 && UpDown == false){
     i++;
@@ -157,6 +156,17 @@ if(sta_procs==1){
       n=0;
       UpDown=false;
     }
+  }
+    
+  */
+  //Performing square signal
+  n++;
+  if(n<100){
+    i=255;
+  }else if(n<355){
+    i=0;
+  }else{
+    n=0;
   }
 
   //Send PWM value

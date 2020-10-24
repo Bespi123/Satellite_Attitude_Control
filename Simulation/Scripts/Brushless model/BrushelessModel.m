@@ -31,7 +31,7 @@ i_dot=1/L*(u-R*i-Ke*w);
 x_dot=[w_dot,i_dot]';
 
 %Output equation (Angular rate)
-y=x(1);
+y=[x(1);x(2)];
 
 end
 

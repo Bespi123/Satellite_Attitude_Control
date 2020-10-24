@@ -15,7 +15,7 @@ close all;
 
 % Simulation control parameters
 n=50000;            %Number of iterations
-Tf=20;              %Simulation time
+Tf=0.1;              %Simulation time
 t=linspace(0,Tf,n);  %Vector time
 
 %Constant values
@@ -30,7 +30,8 @@ Tcte=0;
 
 %Input signal
 %uArr=linspace(0,12,n);
-uArr=[linspace(0,12,round(n/5)),12*ones(1,round(n/5)),linspace(12,0,round(n/5)),zeros(1,round(n/5)),linspace(0,12,round(n/5)),12*ones(1,round(n/5)),linspace(12,0,round(n/5)),zeros(1,round(n/5))];
+uArr=20*ones(1,n);
+%uArr=[linspace(0,12,round(n/5)),12*ones(1,round(n/5)),linspace(12,0,round(n/5)),zeros(1,round(n/5)),linspace(0,12,round(n/5)),12*ones(1,round(n/5)),linspace(12,0,round(n/5)),zeros(1,round(n/5))];
 %Initial conditions;
 x=[0,0]';
 
