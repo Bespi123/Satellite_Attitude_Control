@@ -43,6 +43,8 @@
  */
 //Current sensor Pins
 #define Sensor_IM1  28
+#define Sensor_IM2  27
+#define Sensor_IM3  26
 
 //Reaction Wheels PWM Pins
 #define pin_PWM_M1  40
@@ -51,9 +53,13 @@
 
 //Reaction Wheels direction pines
 #define pin_dir_M1  13
+#define pin_dir_M2  12
+#define pin_dir_M3  11
 
 //Reaction Wheel ecoder Pines
 #define pin_enc_M1  36
+#define pin_enc_M2  35
+#define pin_enc_M3  33
 
 //Debug flag
 #define DEBUG true
@@ -70,8 +76,6 @@ int n=0;
 //Timer interruption Flag 
 bool sta_procs=0;                     
 
-//Direction flag
-bool dir=false;
 //Encoder variables
 volatile int cuentas1, cuentas2, cuentas3;
 volatile int vel_M1, vel_M2, vel_M3;
@@ -87,6 +91,16 @@ const float  sensibi_ACS712=0.185;  //ACS712 [V/A]
 void encoder_M1(){
 if ((digitalRead(pin_enc_M1)))
        cuentas1++;                 //Increase counter  
+}
+
+void encoder_M2(){
+     if (digitalRead(pin_enc_M2))   
+       cuentas2++;                 //Increase counter
+}
+
+void encoder_M3(){
+     if (digitalRead(pin_enc_M3))
+       cuentas3++;                 //Increase counter
 }
 
 /***************************************************************************************
@@ -129,12 +143,18 @@ pinMode(pin_PWM_M3,OUTPUT);
 
 //Set pin PA4, PA3, PA2 as outputs to control rotation direction
 pinMode(pin_dir_M1,OUTPUT);
+pinMode(pin_dir_M2,OUTPUT);
+pinMode(pin_dir_M3,OUTPUT);
 
 //Set pin PC5, PC6, PD6 as encoder inputs 
 pinMode(pin_enc_M1,INPUT);     
+pinMode(pin_enc_M2,INPUT);
+pinMode(pin_enc_M3,INPUT);
 
 //Attach external interrupt for the encoder
 attachInterrupt(digitalPinToInterrupt(pin_enc_M1), encoder_M1, RISING);
+attachInterrupt(digitalPinToInterrupt(pin_enc_M2), encoder_M2, RISING);
+attachInterrupt(digitalPinToInterrupt(pin_enc_M3), encoder_M3, RISING);
 
 // Set Timer 0
 MAP_SysCtlPeripheralEnable(SYSCTL_PERIPH_TIMER0);                    //Enable Timer 0 
@@ -174,20 +194,15 @@ if(sta_procs==1){
     
   */
   //Performing square signal
-  
   n++;
   if(n<100){
     i=255;
   }else if(n<355){
     i=0;
   }else{
-    dir=!dir;
     n=0;
   }
 
-  //Send dir
-  digitalWrite(pin_dir_M1,dir);
-  
   //Send PWM value
   analogWrite(pin_PWM_M1, i);
   analogWrite(pin_PWM_M2, i);
@@ -196,10 +211,12 @@ if(sta_procs==1){
   #if DEBUG
     Serial.print(255-i);
     Serial.print(",");
-    Serial.println(vel_M1);
-   
-    //Serial.print(",");
-    //Serial.println(I_M1);
+    Serial.print(vel_M1);
+    Serial.print(",");
+    Serial.print(vel_M2);
+    Serial.print(",");
+    Serial.println(vel_M3);
+    
   #endif
 
   //Clean Interruption flag
@@ -222,9 +239,13 @@ MAP_TimerIntClear(TIMER0_BASE, TIMER_TIMA_TIMEOUT);
    
 // Read encoders
 vel_M1=cuentas1;
+vel_M2=cuentas2;
+vel_M3=cuentas3;
 
 // Clear encoder varaibles
 cuentas1=0;
+cuentas2=0;
+cuentas3=0;
 
 //Turn-on Interruption flag
 sta_procs=1;
