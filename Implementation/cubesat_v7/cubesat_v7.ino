@@ -123,7 +123,7 @@ const int    ts=200;                            // Sample time of Ecoder, MPU605
  */
 void setup() {
 //Initialize serial and i2c ports 
-Serial5.begin(9600);         //bluetooth module 
+Serial.begin(9600);         //bluetooth module 
 Wire.begin();                //MPU605 port
 
 //Set pin PC5, PC6, PD6 as encoder inputs 
@@ -144,7 +144,7 @@ pinMode(pin_dir_M3,OUTPUT);
 //Set external int in PC5, PC6, PD6 to read encoder pulses
 attachInterrupt(pin_enc_M1,encoder_M1,RISING);
 attachInterrupt(pin_enc_M2,encoder_M2,RISING);
-attachInterrupt(pin_enc_M3,encoder_M3,RISING);
+//attachInterrupt(pin_enc_M3,encoder_M3,RISING);
   
 // Set Timer 2
 MAP_SysCtlPeripheralEnable(SYSCTL_PERIPH_TIMER0);                    //Enable Timer 0 
@@ -177,35 +177,35 @@ if(sta_procs==1){
   //Get Euler angles from MPU data
   Calculo_ang_euler();
   //Send data throuth Bluetooth
-  Serial5.write('i');
+  Serial.write('i');
   send_data1_toPC(roll);     
-  Serial5.write('j');
+  Serial.write('j');
   send_data1_toPC(pitch);    
-  Serial5.write('k');
+  Serial.write('k');
   send_data1_toPC(yaw);     
-  Serial5.write('l');
+  Serial.write('l');
   send_data1_toPC(acel_X);    
-  Serial5.write('m');
+  Serial.write('m');
   send_data1_toPC(acel_Y);     
-  Serial5.write('n');      
+  Serial.write('n');      
   send_data1_toPC(acel_Z);     
-  Serial5.write('o');
+  Serial.write('o');
   send_data1_toPC(gyr_X);    
-  Serial5.write('p');
+  Serial.write('p');
   send_data1_toPC(gyr_Y);      
-  Serial5.write('q');    
+  Serial.write('q');    
   send_data1_toPC(gyr_Z);      
-  Serial5.write('r');
+  Serial.write('r');
   send_data2_toPC(vel_M1);      
-  Serial5.write('s');
+  Serial.write('s');
   send_data2_toPC(I_M1);      
-  Serial5.write('t');      
+  Serial.write('t');      
   send_data2_toPC(vel_M2);      
-  Serial5.write('u');
+  Serial.write('u');
   send_data2_toPC(I_M2);     
-  Serial5.write('v');
+  Serial.write('v');
   send_data2_toPC(vel_M3);      
-  Serial5.write('w');
+  Serial.write('w');
   send_data2_toPC(I_M3);     
   
   //Clean Interruption flag
@@ -213,8 +213,8 @@ if(sta_procs==1){
 }
    
 //Read data from PC
-if(Serial5.available()>0){ 
-  Serial5.readBytes(dataofPC,10);
+if(Serial.available()>0){ 
+  Serial.readBytes(dataofPC,10);
   // DECODIFICATION FRAME
   // Data direction to Motor 1
   if(dataofPC[3]==16) digitalWrite(pin_dir_M1,HIGH);
@@ -268,10 +268,6 @@ I_M3=getSensorASC712(Sensor_IM3,20);
 vel_M1=cuentas1;
 vel_M2=cuentas2;
 vel_M3=cuentas3;
-// Clear encoder varaibles
-cuentas1=0;
-cuentas2=0;
-cuentas3=0;
 
 //Turn-on Interruption flag
 sta_procs=1;
@@ -416,9 +412,9 @@ num=data_toPC;
 aux_data=(num)%100;
 
 //Send data to PC
-Serial5.write(aux_data);              // Envio de unidad y decenas
-Serial5.write((num-aux_data)/100);    // Envio de centenas
-Serial5.write(sign);                  // Envio de signo de numero
+Serial.write(aux_data);              // Envio de unidad y decenas
+Serial.write((num-aux_data)/100);    // Envio de centenas
+Serial.write(sign);                  // Envio de signo de numero
 }
 
 /***************************************************************************************
@@ -436,6 +432,6 @@ num=data_toPC;
 aux_data=(num)%100;
 
 //Send data to PC
-Serial5.write(aux_data);              // Envio de unidad y decenas
-Serial5.write((num-aux_data)/100);    // Envio de centenas
+Serial.write(aux_data);              // Envio de unidad y decenas
+Serial.write((num-aux_data)/100);    // Envio de centenas
 }

@@ -64,7 +64,7 @@
  */
 //Trapezoidal wave form constants
 bool UpDown = false;
-int i=0;
+int i=-255;
 int n=0;
 
 //Timer interruption Flag 
@@ -150,31 +150,35 @@ MAP_TimerEnable(TIMER0_BASE, TIMER_A);
 void loop() {
   
 if(sta_procs==1){
-  /*
+  
   // Performing trapezoidal wave form
   if(i<255 && UpDown == false){
     i++;
   } else if (i==255 && UpDown == false){
     i=255;
     n++;
-    if (n==255){
+    if (n==50){
       n=0;
       UpDown=true;
     }
-  } else if (UpDown==true && i>0){
+  } else if (UpDown==true && i>-255){
     i--;
-  } else if (UpDown==true && i==0) {
-    i=0;
+  } else if (UpDown==true && i==-255) {
+    i=-255;
     n++;
-    if (n==255){
+    if (n==50){
       n=0;
       UpDown=false;
     }
   }
-    
-  */
+
+ if(i>0)
+    dir=true;
+ else
+    dir=false;
+
   //Performing square signal
-  
+/*
   n++;
   if(n<100){
     i=255;
@@ -184,17 +188,18 @@ if(sta_procs==1){
     dir=!dir;
     n=0;
   }
-
-  //Send dir
-  digitalWrite(pin_dir_M1,dir);
+*/
+//Send dir
+digitalWrite(pin_dir_M1,dir);
   
-  //Send PWM value
-  analogWrite(pin_PWM_M1, i);
-  analogWrite(pin_PWM_M2, i);
-  analogWrite(pin_PWM_M3, i);
+//Send PWM value
+analogWrite(pin_PWM_M1, abs(i));
+// analogWrite(pin_PWM_M1, i);
+ // analogWrite(pin_PWM_M2, i);
+ // analogWrite(pin_PWM_M3, i);
 
   #if DEBUG
-    Serial.print(255-i);
+    Serial.print(i);
     Serial.print(",");
     Serial.println(vel_M1);
    
@@ -205,6 +210,7 @@ if(sta_procs==1){
   //Clean Interruption flag
   sta_procs=0; 
 }
+delay(500);
 }
 
 /***************************************************************************************
