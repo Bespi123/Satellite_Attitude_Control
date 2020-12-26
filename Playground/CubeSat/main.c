@@ -47,6 +47,7 @@ static int I2C_wait_till_done(void);
 
 // Interrupt functions (to erase)
 void GPIO(void);
+void initDirectionPins (void);
 void PortF1_IntEnable(void);
 
 //  UART Functions
@@ -76,6 +77,7 @@ int main(void){
   MPU6050_Init();
   Delay(1000);
   GPIO();
+  initDirectionPins();
   enable_PWM();
   //PortF1_IntEnable();
   while(1){
@@ -215,10 +217,13 @@ void UART5_Handler(void){
     unsigned char rx_data = 0;
     UART5_ICR_R &= ~(0x010);            // Clear receive interrupt
     rx_data = UART5_DR_R ;              // Get the received data byte
-    if(rx_data == 'A')
+    if(rx_data == 'A'){
         GPIO_PORTF_DATA_R |= (1<<3);
-    else if(rx_data == 'B')
-        GPIO_PORTF_DATA_R &= ~0X08;
+        GPIO_PORTA_DATA_R |= (1<<4);
+    }else if(rx_data == 'B'){
+        GPIO_PORTF_DATA_R &= ~(1<<3);
+        GPIO_PORTA_DATA_R &= ~(1<<4);
+    }
     UART5_Transmitter(rx_data); // send data that is received
 }
 
@@ -432,4 +437,14 @@ void enable_PWM(void){
     PWM1_3_CMPA_R = 4999;               // Set duty cyle to to minumum value
     PWM1_3_CTL_R = 1;                   // Enable Generator 3 counter
     PWM1_ENABLE_R = 0x40;               // Enable PWM1 channel 6 output
+}
+
+void initDirectionPins(void){
+    // Clock setting for PortA
+    SYSCTL_RCGCGPIO_R |= (1<<0);            // Enable clock
+    while((SYSCTL_PRGPIO_R & (1<<0))==0);   // Wait until clock is enable
+
+    //Initialize PA2, PA3, PA4  as a digital outputs
+    GPIO_PORTA_DIR_R |= (1<<4)|(1<<3)|(1<<2);    // Set PA2, PA3, PA4 as outputs
+    GPIO_PORTA_DEN_R |= (1<<4)|(1<<3)|(1<<2);    // make PORTF4-0 digital pins
 }
