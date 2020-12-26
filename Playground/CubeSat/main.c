@@ -415,14 +415,11 @@ void enable_PWM(void){
     GPIO_PORTF_PCTL_R |= 0x00000500;    // Make PF2 PWM output pin
     GPIO_PORTF_DEN_R |= (1<<2);         // set PF2 as a digital pin
 
-    PWM1_3_CTL_R
-
-    PWM1->_3_CTL &= ~(1<<0);   /* Disable Generator 3 counter */
-    PWM1->_3_CTL &= ~(1<<1);   /* select down count mode of counter 3*/
-    PWM1->_3_GENA = 0x0000008C;  /* Set PWM output when counter reloaded and clear when matches PWMCMPA */
-    PWM1->_3_LOAD = 5000;     /* set load value for 50Hz 16MHz/65 = 250kHz and (250KHz/5000) */
-    PWM1->_3_CMPA = 4999;     /* set duty cyle to to minumum value*/
-    PWM1->_3_CTL = 1;           /* Enable Generator 3 counter */
-    PWM1->ENABLE = 0x40;      /* Enable PWM1 channel 6 output */
-
+    PWM1_3_CTL_R &= ~(1<<0);            // Disable Generator 3 counter
+    PWM1_3_CTL_R &= ~(1<<1);            // Select down count mode of counter 3
+    PWM1_3_GENA_R = 0x0000008C;         // Set PWM output when counter reloaded and clear when matches PWMCMPA
+    PWM1_3_LOAD_R = 5000;               // Set load value for 50Hz 16MHz/65 = 250kHz and (250KHz/5000)
+    PWM1_3_CMPA_R = 4999;               // Set duty cyle to to minumum value
+    PWM1_3_CTL_R = 1;                   // Enable Generator 3 counter
+    PWM1_ENABLE_R = 0x40;               // Enable PWM1 channel 6 output
 }
