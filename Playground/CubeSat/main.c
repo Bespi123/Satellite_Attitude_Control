@@ -58,6 +58,7 @@ void UART5_printString(char *str);
 bool MPU6050_Init(void);
 void MPU6050_getData(int16_t *MPURawData);
 void Delay(unsigned long counter);
+void enable_PWM(void);
 
 //----------------PROGRAM GLOBAL VARIABLES--------------
 int16_t MPURawData[7];
@@ -66,7 +67,8 @@ float AX, AY, AZ, t, GX, GY, GZ;      // MPU6050 Data
 
 //---------------------MAIN PROGRAM---------------------
 int main(void){
-
+  //    Local variables
+  int duty_cycle =  4999;
   //    Initialize I2C1 and UART5
   I2c1_begin();
   Delay(1000);
@@ -74,9 +76,17 @@ int main(void){
   MPU6050_Init();
   Delay(1000);
   GPIO();
+  enable_PWM();
   //PortF1_IntEnable();
   while(1){
-      /*
+
+      duty_cycle = duty_cycle - 10;
+      if (duty_cycle <= 0)
+         duty_cycle = 5000;
+      PWM1_3_CMPA_R = duty_cycle;
+      Delay(10);
+
+
       // Read MPU6050 in a burst of data
       MPU6050_getData(MPURawData);
 
@@ -92,7 +102,7 @@ int main(void){
       //Turn into string and send trough Serial5
       sprintf(m_sMsg,"%.2f,%.2f,%.2f\n",AX,AY,AZ);
       UART5_printString(m_sMsg);
-      */
+
     }
 }
 
