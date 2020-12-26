@@ -45,8 +45,9 @@ char I2C1_writeByte(int slaveAddr, char memAddr, char data);
 char I2C1_readBytes(int slaveAddr, char memAddr, int byteCount, char* data);
 static int I2C_wait_till_done(void);
 
-// Interrupt functions (to erase)
+// Interrupt functions
 void GPIO(void);
+void timerA1Handler(void);
 void initDirectionPins (void);
 void PortF1_IntEnable(void);
 
@@ -60,6 +61,10 @@ bool MPU6050_Init(void);
 void MPU6050_getData(int16_t *MPURawData);
 void Delay(unsigned long counter);
 void enable_PWM(void);
+
+// Timer Functions
+void initTimer1Aint(void);
+
 
 //----------------PROGRAM GLOBAL VARIABLES--------------
 int16_t MPURawData[7];
@@ -79,6 +84,7 @@ int main(void){
   GPIO();
   initDirectionPins();
   enable_PWM();
+  initTimer1Aint();
   //PortF1_IntEnable();
   while(1){
 
@@ -448,3 +454,47 @@ void initDirectionPins(void){
     GPIO_PORTA_DIR_R |= (1<<4)|(1<<3)|(1<<2);    // Set PA2, PA3, PA4 as outputs
     GPIO_PORTA_DEN_R |= (1<<4)|(1<<3)|(1<<2);    // make PORTF4-0 digital pins
 }
+
+void initTimer1Aint(void){
+
+    //Enable timer1
+    SYSCTL_RCGCTIMER_R |= (1<<1);  // Enable clock Timer1 subtimer A in run mode
+    TIMER1_CTL_R = 0;              // Disable timer1 output
+    TIMER1_CFG_R = 0x4;            // Select 16-bit configuration option
+    TIMER1_TAMR_R = 0x02;          // Select periodic down counter mode of timer1
+    TIMER1_TAPR_R = 250-1;         // TimerA prescaler value 250
+    TIMER1_TAILR_R = 12800-1 ;     // TimerA counter starting count down value from 200ms
+    TIMER1_ICR_R = 0x1;            // TimerA timeout flag bit clears
+
+    // Enable timer 1 interrupt
+    TIMER1_IMR_R |=(1<<0);         // Enables TimerA time-out  interrupt mask
+    TIMER1_CTL_R |= 0x01;          // Enable TimerA module
+    NVIC_EN0_R |= (1<<21);         // Enable IRQ21
+}
+
+void timerA1Handler(void){
+    if(TIMER1_MIS_R & 0x01)
+        GPIO_PORTF_DATA_R ^= (1<<3);    // Toggle blue led
+    TIMER1_ICR_R = 0X01;                // TA1 Timeout flag
+}
+
+/*
+void timerA3Init(void){
+    //Enable timer3A and portC
+    SYSCTL_RCGCTIMER_R |= (1<<3);  // Enable clock to Timer 3
+    SYSCTL_RCGCGPIO_R |= (1<<2);   // Enable clock to PORTC
+
+    //Enable portC PC5
+    GPIO_PORTC_DIR_R &= ~(1<<5);   // Make PC5 an input pin
+    GPIO_PORTC_DEN_R |= (1<<5);    // Make PC5 a digital pin
+    GPIO_PORTC_AFSEL_R |= (1<<5);  // Enable alternate function on PC5
+    GPIO_PORTC_PCTL_R &= ~0x00F00000;  // Configure PC5 as T3CCP0 pin
+    GPIOB->PCTL |= 0x00000700;
+
+    TIMER3->CTL &= ~(1<<0);  /* disable TIMER3A during setup */
+    //TIMER3->CFG |= (1<<2);  /* configure as 16-bit timer mode */
+    //TIMER3->TAMR = 0x13;        /* up-count, edge-count, capture mode */
+    //TIMER3->TAMATCHR = 0xFFFF;  /* set the count limit */
+    //TIMER3->TAPMR = 0xFF;         /* to 0xFFFFFF with prescaler */
+    //TIMER3->CTL |= ~(1<<3)|~(1<<2); /* capture the rising edge */
+//}
