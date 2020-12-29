@@ -64,7 +64,8 @@ void enable_PWM(void);
 
 // Timer Functions
 void initTimer1Aint(void);
-
+void timerA3Init(void);
+int timer3ACapture(void);
 
 //----------------PROGRAM GLOBAL VARIABLES--------------
 int16_t MPURawData[7];
@@ -86,6 +87,7 @@ int main(void){
   enable_PWM();
   initTimer1Aint();
   //PortF1_IntEnable();
+  TIMER3_CTL_R |= 1;             // Enable TIMER3A
   while(1){
 
       duty_cycle = duty_cycle - 10;
@@ -473,28 +475,45 @@ void initTimer1Aint(void){
 }
 
 void timerA1Handler(void){
-    if(TIMER1_MIS_R & 0x01)
+    int counter;
+    char mesg[12];
+
+    if(TIMER1_MIS_R & 0x01){
         GPIO_PORTF_DATA_R ^= (1<<3);    // Toggle blue led
+        counter = timer3ACapture();
+        TIMER3_CTL_R &= ~1;             // Disable TIMER3A
+        TIMER3_TAPV_R = 0;
+        TIMER3_TAR_R = 0;
+        sprintf(mesg, "RPM: %d", counter*60/(200*6));
+        UART5_printString(mesg);
+        TIMER3_CTL_R |= 1;             // Enable TIMER3A
+    }
+
     TIMER1_ICR_R = 0X01;                // TA1 Timeout flag
 }
 
-/*
+
 void timerA3Init(void){
     //Enable timer3A and portC
     SYSCTL_RCGCTIMER_R |= (1<<3);  // Enable clock to Timer 3
-    SYSCTL_RCGCGPIO_R |= (1<<2);   // Enable clock to PORTC
+    SYSCTL_RCGCGPIO_R |= (1<<1);   // Enable clock to PORTB
 
-    //Enable portC PC5
-    GPIO_PORTC_DIR_R &= ~(1<<5);   // Make PC5 an input pin
-    GPIO_PORTC_DEN_R |= (1<<5);    // Make PC5 a digital pin
-    GPIO_PORTC_AFSEL_R |= (1<<5);  // Enable alternate function on PC5
-    GPIO_PORTC_PCTL_R &= ~0x00F00000;  // Configure PC5 as T3CCP0 pin
-    GPIOB->PCTL |= 0x00000700;
+    //Enable PB2
+    GPIO_PORTB_DIR_R &= ~(1<<2);   // Make PB2 an input pin
+    GPIO_PORTB_DEN_R |= (1<<2);    // Make PB2 a digital pin
+    GPIO_PORTB_AFSEL_R |= (1<<2);  // Enable alternate function on PB2
+    GPIO_PORTB_PCTL_R &= ~0x00000F00;  // Configure PB2 as T3CCP0 pin
+    GPIO_PORTB_PCTL_R |= 0x00000700;
 
-    TIMER3->CTL &= ~(1<<0);  /* disable TIMER3A during setup */
-    //TIMER3->CFG |= (1<<2);  /* configure as 16-bit timer mode */
-    //TIMER3->TAMR = 0x13;        /* up-count, edge-count, capture mode */
-    //TIMER3->TAMATCHR = 0xFFFF;  /* set the count limit */
-    //TIMER3->TAPMR = 0xFF;         /* to 0xFFFFFF with prescaler */
-    //TIMER3->CTL |= ~(1<<3)|~(1<<2); /* capture the rising edge */
-//}
+    //Set timer as input-edge counter mode
+    TIMER3_CTL_R &= ~(1<<0);        // Disable TIMER3A during setup
+    TIMER3_CFG_R |= (1<<2);         // Configure as 16-bit timer mode
+    TIMER3_TAMR_R = 0x13;           // Up-count, edge-count, capture mode
+    TIMER3_TAMATCHR_R = 0xFFFF;     // Set the count limit
+    TIMER3_TAPMR_R = 0xFF;          // To 0xFFFFFF with prescaler
+    TIMER3_CTL_R |= ~(1<<3)|~(1<<2);    // Capture the rising edge
+}
+
+int timer3ACapture(void){
+    return TIMER3_TAR_R;
+}
