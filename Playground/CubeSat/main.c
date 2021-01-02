@@ -97,7 +97,7 @@ int main(void){
       PWM1_3_CMPA_R = duty_cycle;
       Delay(10);
 
-
+/*
       // Read MPU6050 in a burst of data
       MPU6050_getData(MPURawData);
 
@@ -113,7 +113,7 @@ int main(void){
       //Turn into string and send trough Serial5
       sprintf(m_sMsg,"%.2f,%.2f,%.2f\n",AX,AY,AZ);
       UART5_printString(m_sMsg);
-
+*/
     }
 }
 
@@ -476,7 +476,7 @@ void initTimer1Aint(void){
 }
 
 void timerA1Handler(void){
-    int counter;
+    int counter = 0;
     char mesg[12];
 
     if(TIMER1_MIS_R & 0x01){
@@ -484,9 +484,10 @@ void timerA1Handler(void){
 
         counter = timerA2Capture();
         TIMER2_CTL_R &= ~1;             // Disable TIMER2A
-        TIMER2_TAPV_R = 0;
+        TIMER2_TAV_R = 0;
         TIMER2_TAR_R = 0;
-        sprintf(mesg, "RPM: %d \n", counter*60/(200*6));
+        //sprintf(mesg, "RPM: %d \n", counter);
+        sprintf(mesg, "%d \n", counter);
         UART5_printString(mesg);
         counter = 0;
         TIMER2_CTL_R |= 1;             // Enable TIMER3A
