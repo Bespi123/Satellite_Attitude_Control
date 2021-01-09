@@ -73,23 +73,24 @@ void adc0Initialization(void);
 //----------------PROGRAM GLOBAL VARIABLES--------------
 int16_t MPURawData[7];
 char m_sMsg[20];
-int counter = 0;
+volatile unsigned int counter = 0;
 float AX, AY, AZ, t, GX, GY, GZ;      // MPU6050 Data
 volatile unsigned int adc_value;
 volatile unsigned int adc_value1;
-char mesg[12];
+char mesg[100];
+int duty_cycle =  4999;
+
 volatile float voltage;
 volatile bool m_bInterrupt = false;
 //Filter variables (Moving Average Filter)
-const unsigned int a[3]={1,1,1};
-const unsigned int b=3;
-volatile unsigned int x[3] = {0,0,0};
-volatile unsigned int y = 0;
+const int windowSize = 20;
+volatile unsigned int x[20];
+volatile unsigned long int y = 0;
 
 //---------------------MAIN PROGRAM---------------------
 int main(void){
   //    Local variables
-  int duty_cycle =  4999;
+ // int duty_cycle =  4999;
   //    Initialize I2C1 and UART5
   I2c1_begin();
   Delay(1000);
@@ -105,23 +106,25 @@ int main(void){
   //PortF1_IntEnable();
 
   while(1){
-
+      /*
       duty_cycle = duty_cycle - 10;
       if (duty_cycle <= 0)
          duty_cycle = 5000;
       PWM1_3_CMPA_R = duty_cycle;
-
+*/
      // voltage = (adc_value * 0.0008);
      // sprintf(mesg, "%d /n", adc_value);
      // UART5_printString(mesg);
 
       //sprintf(mesg, "RPM: %d \n", counter);
-
+/*
       if(m_bInterrupt){
           sprintf(mesg, "%d, %d, %d \n", counter, adc_value-2400, adc_value1-2400);
+          //sprintf(mesg, "%d,%d, %d \n", counter, adc_value1-2400);
           UART5_printString(mesg);
           m_bInterrupt = false;
       }
+*/
       Delay(10);
 /*
       // Read MPU6050 in a burst of data
@@ -510,6 +513,14 @@ void timerA1Handler(void){
         TIMER2_TAV_R = 0;
         TIMER2_TAR_R = 0;
 
+        duty_cycle = duty_cycle - 10;
+        if (duty_cycle <= 0)
+           duty_cycle = 5000;
+        PWM1_3_CMPA_R = duty_cycle;
+
+        sprintf(mesg, "%d, %d, %d \n", counter, adc_value/10, adc_value1/10);
+        UART5_printString(mesg);
+
         m_bInterrupt = true;
         TIMER2_CTL_R |= 1;             // Enable TIMER3A
     }
@@ -572,16 +583,22 @@ void adc0Initialization(void){
 }
 
 void ADC0SS3_Handler(void){
+    adc_value = (ADC0_SSFIFO3_R*3300)/ 4095;     // Read ADC coversion result from SS3 FIFO
+    y=0;
+    // Perform mobile average filter
+    for(int i = windowSize-2; i >= 0; i--){          // Shift data
+        x[i+1]=x[i];
+    }
+    x[0]=(ADC0_SSFIFO3_R*3300)/ 4095;               // Get new data
+
+    adc_value1 = 0;
+
+    for(int i = 0; i < windowSize; i++){
+        adc_value1 += x[i]/windowSize;
+    };
+
     ADC0_ISC_R = 8;                 // clear coversion clear flag bit
-
-    adc_value = ADC0_SSFIFO3_R;     // Read ADC coversion result from SS3 FIFO
-
-    x[2]=x[1]; x[1]=x[0];           // Shift data
-    x[0]=ADC0_SSFIFO3_R;            // Get new data
-    y=a[0]*x[0]+a[1]*x[1]+a[2]*x[2];
-    adc_value1 = y/3;
-
-    //sprintf(mesg, "%0.3f, %d \n", y[0]-2400, x[0]-2400);
+    //sprintf(mesg, "%d\n", adc_value1-2400);
     //UART5_printString(mesg);
 
     ADC0_PSSI_R |= (1<<3);          // Enable SS3 conversion or start sampling data from AN0
