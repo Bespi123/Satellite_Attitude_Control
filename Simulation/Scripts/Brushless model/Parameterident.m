@@ -1,4 +1,4 @@
-%**************************************************************************
+_t %**************************************************************************
 % AUTHOR: Brayan Espinoza 22/10/2020
 % DESCRIPTION: 
 % This program perform the parameter estimation for a brushless motor.

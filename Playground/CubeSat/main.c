@@ -67,10 +67,24 @@ void initTimer1Aint(void);
 void timerA2Init(void);
 int timerA2Capture(void);
 
+// ADC Initialization
+void adc0Initialization(void);
+
 //----------------PROGRAM GLOBAL VARIABLES--------------
 int16_t MPURawData[7];
 char m_sMsg[20];
+int counter = 0;
 float AX, AY, AZ, t, GX, GY, GZ;      // MPU6050 Data
+volatile unsigned int adc_value;
+volatile unsigned int adc_value1;
+char mesg[12];
+volatile float voltage;
+volatile bool m_bInterrupt = false;
+//Filter variables (Moving Average Filter)
+const unsigned int a[3]={1,1,1};
+const unsigned int b=3;
+volatile unsigned int x[3] = {0,0,0};
+volatile unsigned int y = 0;
 
 //---------------------MAIN PROGRAM---------------------
 int main(void){
@@ -87,6 +101,7 @@ int main(void){
   enable_PWM();
   timerA2Init();
   initTimer1Aint();
+  adc0Initialization();
   //PortF1_IntEnable();
 
   while(1){
@@ -95,8 +110,19 @@ int main(void){
       if (duty_cycle <= 0)
          duty_cycle = 5000;
       PWM1_3_CMPA_R = duty_cycle;
-      Delay(10);
 
+     // voltage = (adc_value * 0.0008);
+     // sprintf(mesg, "%d /n", adc_value);
+     // UART5_printString(mesg);
+
+      //sprintf(mesg, "RPM: %d \n", counter);
+
+      if(m_bInterrupt){
+          sprintf(mesg, "%d, %d, %d \n", counter, adc_value-2400, adc_value1-2400);
+          UART5_printString(mesg);
+          m_bInterrupt = false;
+      }
+      Delay(10);
 /*
       // Read MPU6050 in a burst of data
       MPU6050_getData(MPURawData);
@@ -476,9 +502,6 @@ void initTimer1Aint(void){
 }
 
 void timerA1Handler(void){
-    int counter = 0;
-    char mesg[12];
-
     if(TIMER1_MIS_R & 0x01){
         GPIO_PORTF_DATA_R ^= (1<<3);    // Toggle blue led
 
@@ -486,10 +509,8 @@ void timerA1Handler(void){
         TIMER2_CTL_R &= ~1;             // Disable TIMER2A
         TIMER2_TAV_R = 0;
         TIMER2_TAR_R = 0;
-        //sprintf(mesg, "RPM: %d \n", counter);
-        sprintf(mesg, "%d \n", counter);
-        UART5_printString(mesg);
-        counter = 0;
+
+        m_bInterrupt = true;
         TIMER2_CTL_R |= 1;             // Enable TIMER3A
     }
 
@@ -521,4 +542,47 @@ void timerA2Init(void){
 
 int timerA2Capture(void){
     return TIMER2_TAR_R;
+}
+
+void adc0Initialization(void){
+    // Enable Clock to ADC4 and GPIO pins
+    SYSCTL_RCGCGPIO_R |= (1<<3);   // Enable Clock to GPIOD or PD3/AN4
+    SYSCTL_RCGCADC_R  |= (1<<0);   // Module ADC0 clock enable
+
+    // Initialize PD3 for \AIN4 input
+    GPIO_PORTD_DIR_R &= ~(1<<3);   // Make PD3 input
+    GPIO_PORTD_AFSEL_R |= (1<<3);  // Enable alternate function
+    GPIO_PORTD_DEN_R &= ~(1<<3);   // Disable digital function
+    GPIO_PORTD_AMSEL_R |= (1<<3);  // Enable analog function
+
+    // Initialize sample sequencer3
+    //ADC0_PC_R = (1<<0);           // Configure for 125k samples/sec
+    ADC0_SSPRI_R = 0X3210;        // Seq0 is highest, seq3 lowest priority
+    ADC0_ACTSS_R &= ~(1<<3);      // Disable SS3 during configuration
+    ADC0_EMUX_R &= ~0xF000;       // Software trigger conversion
+    //ADC0_SSMUX3_R = 4;          // Get input from channel 4
+    ADC0_SSMUX3_R = 4;            // Get input from channel 4
+    ADC0_SSCTL3_R |= (1<<1)|(1<<2);   // Take one sample at a time, set flag at 1st sample
+
+    // Enable ADC Interrupt
+    ADC0_IM_R |= (1<<3);            // Unmask ADC4 sequence 3 interrupt
+    NVIC_EN0_R |= (1<<17);           // Enable IRQ17 for ADC0SS3
+    ADC0_ACTSS_R |= (1<<3);         // Enable ADC0 sequencer 3
+    ADC0_PSSI_R |= (1<<3);          // Enable SS3 conversion or start sampling data from AN0
+}
+
+void ADC0SS3_Handler(void){
+    ADC0_ISC_R = 8;                 // clear coversion clear flag bit
+
+    adc_value = ADC0_SSFIFO3_R;     // Read ADC coversion result from SS3 FIFO
+
+    x[2]=x[1]; x[1]=x[0];           // Shift data
+    x[0]=ADC0_SSFIFO3_R;            // Get new data
+    y=a[0]*x[0]+a[1]*x[1]+a[2]*x[2];
+    adc_value1 = y/3;
+
+    //sprintf(mesg, "%0.3f, %d \n", y[0]-2400, x[0]-2400);
+    //UART5_printString(mesg);
+
+    ADC0_PSSI_R |= (1<<3);          // Enable SS3 conversion or start sampling data from AN0
 }
