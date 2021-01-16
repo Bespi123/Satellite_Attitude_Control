@@ -22,7 +22,8 @@ J_tilde=[entr(9),entr(12),entr(13);
          entr(12),entr(10),entr(14);
          entr(13),entr(14),entr(11)];
 R=diag(Irw_par*ones(1,3));             %Matriz de inercias paralelas
-J=J_tilde+diag(2*Irw_per*ones(1,3));   %Tensor de inercia general
+%J=J_tilde+diag(2*Irw_per*ones(1,3));   %Tensor de inercia general
+J=J_tilde+diag(4*Irw_per*ones(1,3));   %Tensor de inercia general
 
 %-----------------Ecuación cinematica---------------------------------
 %Libro: Fundamentals of Spacecraft Attitude Determination and Control
