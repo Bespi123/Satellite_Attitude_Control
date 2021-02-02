@@ -10,8 +10,7 @@ MainWindow::MainWindow(QWidget *parent)
     //Get local Dir
     QDir currentDir;
     m_sLocalDir = currentDir.absolutePath();
-
-    qDebug()<<"Current Dir: "<<m_sLocalDir;
+    ui->label_dir->setText(m_sLocalDir);
 
     //Get avaiable ports and display in comboBoxPort
     const auto infos = QSerialPortInfo::availablePorts();
@@ -65,30 +64,34 @@ void MainWindow::readHandler(){
     //Local variables
     QByteArray rawData;
 
-    //Copy incoming data into m_bReadData and evaluate split condition
+    //Copy incoming data and show it
     m_bReadData.append(m_qSerial->readAll());
-    if(!m_bReadData.isEmpty()){
-        ui->textBrowser->insertPlainText(m_bReadData);
-        if(!m_bMode)
-            m_bReadData.clear();
+    ui->textBrowser->setText(m_bReadData);
+    QScrollBar *sb = ui->textBrowser->verticalScrollBar();
+    sb->setValue(sb->maximum());
+
+    // if recording botton was clicked
+    if(m_bMode){
+        if(!m_bReadData.isEmpty()){
+            //Open file
+            QString dataSerial = m_bReadData;
+            m_fQfile = new  QFile(m_sFileName);
+            if(m_fQfile->open(QIODevice::WriteOnly | QIODevice::Text | QIODevice::Append)){
+        //if(m_fQfile->open(QIODevice::Append)){
+            //QTextStream dataFile (m_fQfile);
+            //dataFile << dataSerial<<endl;
+                m_fQfile->write(m_bReadData,m_bReadData.size());
+                ui->label_Recording->setText("Grabando");
+            }else{
+                ui->label_Recording->setText("Error");
+            }
+        }
     }
 }
 
 void MainWindow::on_pushButton_grabar_clicked(){
-    QString fileName = ui->lineEdit_Archive->text();
-    QString dataSerial = m_bReadData;
-    m_fQfile = new  QFile(fileName);
     m_bMode = true;
-
-    if(m_fQfile->open(QIODevice::WriteOnly | QIODevice::Text | QIODevice::Append)){
-        QTextStream dataFile (m_fQfile);
-        dataFile << dataSerial;
-        ui->label_Recording->setText("Grabando");
-        if(m_bMode)
-            m_bReadData.clear();
-    }else{
-        qDebug()<<"Error";
-    }
+    m_sFileName = ui->lineEdit_Archive->text();
 }
 
 void MainWindow::on_pushButton_Detener_clicked(){

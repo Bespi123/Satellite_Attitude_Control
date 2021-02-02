@@ -5,6 +5,7 @@
 #include <QtSerialPort/QSerialPort>
 #include <QSerialPortInfo>
 #include <QTextStream>
+#include <QScrollBar>
 #include <QDebug>
 #include <QFile>
 #include <QDir>
@@ -43,6 +44,7 @@ private:
 private:
     QString m_sSerialPort;
     QString m_sLocalDir;
+    QString m_sFileName;
     QFile* m_fQfile;
     bool m_bMode = false;
 };

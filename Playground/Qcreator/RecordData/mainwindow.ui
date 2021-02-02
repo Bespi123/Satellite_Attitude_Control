@@ -6,8 +6,8 @@
    <rect>
     <x>0</x>
     <y>0</y>
-    <width>516</width>
-    <height>255</height>
+    <width>512</width>
+    <height>306</height>
    </rect>
   </property>
   <property name="windowTitle">
@@ -18,7 +18,7 @@
     <property name="geometry">
      <rect>
       <x>10</x>
-      <y>20</y>
+      <y>10</y>
       <width>491</width>
       <height>191</height>
      </rect>
@@ -113,19 +113,28 @@
       </layout>
      </item>
      <item>
-      <widget class="QTextBrowser" name="textBrowser">
-       <property name="enabled">
-        <bool>true</bool>
-       </property>
-       <property name="mouseTracking">
-        <bool>true</bool>
-       </property>
-       <property name="tabletTracking">
-        <bool>true</bool>
-       </property>
-      </widget>
+      <widget class="QTextBrowser" name="textBrowser"/>
      </item>
     </layout>
+   </widget>
+   <widget class="QLabel" name="label_dir">
+    <property name="geometry">
+     <rect>
+      <x>10</x>
+      <y>220</y>
+      <width>491</width>
+      <height>27</height>
+     </rect>
+    </property>
+    <property name="cursor">
+     <cursorShape>IBeamCursor</cursorShape>
+    </property>
+    <property name="acceptDrops">
+     <bool>true</bool>
+    </property>
+    <property name="text">
+     <string>Dir</string>
+    </property>
    </widget>
   </widget>
   <widget class="QMenuBar" name="menubar">
@@ -133,7 +142,7 @@
     <rect>
      <x>0</x>
      <y>0</y>
-     <width>516</width>
+     <width>512</width>
      <height>21</height>
     </rect>
    </property>
