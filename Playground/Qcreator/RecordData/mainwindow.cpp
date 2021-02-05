@@ -99,3 +99,11 @@ void MainWindow::on_pushButton_Detener_clicked(){
     m_fQfile->close();
     ui->label_Recording->setText("No Grabando");
 }
+
+void MainWindow::on_pushButton_send_clicked(){
+    QString Message;
+    Message = ui->lineEdit_send->text();
+    QByteArray raw = Message.toLocal8Bit();
+    ui->lineEdit_send->setText("");
+    m_qSerial->write(raw);
+}

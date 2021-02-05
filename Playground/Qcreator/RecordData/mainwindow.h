@@ -35,6 +35,8 @@ private slots:
 
     void on_pushButton_Detener_clicked();
 
+    void on_pushButton_send_clicked();
+
 private:
     bool init(const QString &portName);
 
