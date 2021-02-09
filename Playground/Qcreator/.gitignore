@@ -1,4 +1,1 @@
-#Carpetas a ignorar
-Master/CMakeLists.txt.user
-build/*
-build
+.build/*
