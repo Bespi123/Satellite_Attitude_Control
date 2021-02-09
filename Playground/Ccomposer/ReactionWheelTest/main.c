@@ -75,12 +75,13 @@ void enable_PWM(void);
 void Delay(unsigned long counter);
 
 //----------------PROGRAM GLOBAL VARIABLES--------------
-int16_t m_iMpuRawData[7];                // MPU6050 raw data
-float m_fAX, m_fAY, m_fAZ, m_ft, m_fGX, m_fGY, m_fGZ;      // MPU6050 Data
-volatile unsigned int m_iCounter = 0;    // Encoder counter
-volatile unsigned int m_iRw3Current;     // ADC Current
-char m_cMesg[100];                       // Buffer to send
-int m_iDutyCycle =  4999;               // PWM dutty cycle
+int16_t m_iMpuRawData[7];                                   // MPU6050 raw data
+float m_fAX, m_fAY, m_fAZ, m_ft, m_fGX, m_fGY, m_fGZ;       // MPU6050 Data
+volatile unsigned int m_iCounter = 0;                       // Encoder counter
+volatile unsigned int m_iRw3Current;                        // ADC Current
+char m_cMesg[100];                                          // Buffer to send
+int m_iDutyCycle =  4999;                                   // PWM duty cycle
+int m_iMode = 0;                                            // Mode variable
 
 //Filter variables (Mobile Average Filter)
 const int m_iWindowSize = 20;            // Window size
@@ -221,8 +222,15 @@ void UART5_Handler(void){
         GPIO_PORTA_DATA_R |= (1<<4);
     }else if(rx_data == 'B'){
         GPIO_PORTA_DATA_R &= ~(1<<4);
+    }else if(rx_data == '1'){           // Step OFF
+        m_iMode = 0;
+    }else if(rx_data == '2'){           // Step ON
+        m_iMode = 1;
+    }else if(rx_data == '3'){           // Ramp (torque step)
+        m_iMode = 2;
     }
-    UART5_Transmitter(rx_data); // send data that is received
+
+    //UART5_Transmitter(rx_data); // send data that is received
 }
 
 /* void I2c1_begin(void)
@@ -417,8 +425,8 @@ void initTimer1Aint(void){
     TIMER1_CFG_R = 0x4;            // Select 16-bit configuration option
     TIMER1_TAMR_R = 0x02;          // Select periodic down counter mode of timer1
     TIMER1_TAPR_R = 250-1;         // TimerA prescaler value 250 (64KHz)
-    //TIMER1_TAILR_R = 12800-1 ;     // TimerA counter starting count down value from 200ms
-    TIMER1_TAILR_R = 64000-1 ;     // TimerA counter starting count down value from 1s
+    TIMER1_TAILR_R = 12800-1 ;     // TimerA counter starting count down value from 200ms
+    //TIMER1_TAILR_R = 64000-1 ;     // TimerA counter starting count down value from 1s
     TIMER1_ICR_R = 0x1;            // TimerA timeout flag bit clears
 
     // Enable timer 1 interrupt
@@ -433,18 +441,26 @@ void timerA1Handler(void){
         GPIO_PORTF_DATA_R ^= (1<<3);
 
         // Read timer2 counter to measure RPM
-        m_iCounter = timerA2Capture();
+        //m_iCounter = timerA2Capture()*1.6947;     // If fs = 1s
+        m_iCounter = timerA2Capture()*8.4735;       // If fs = 0.2s
         TIMER2_CTL_R &= ~1;             // Disable TIMER2A
         TIMER2_TAV_R = 0;
         TIMER2_TAR_R = 0;
 
-        /*
-       m_iDutyCycle = m_iDutyCycle - 10;
-       if (m_iDutyCycle <= 0)
-           m_iDutyCycle = 5000;
-           */
-        m_iDutyCycle = 4999;
+        // Perform PWM duty cicle
+        if (m_iMode == 0){
+            m_iDutyCycle = 0;
+        } else if(m_iMode == 1){
+            m_iDutyCycle = 4999;
+        } else if(m_iMode == 2){
+            m_iDutyCycle = m_iDutyCycle - 10;
+           if (m_iDutyCycle <= 0)
+               m_iDutyCycle = 5000;
+        }
+
         PWM1_3_CMPA_R = m_iDutyCycle;
+
+
 
         sprintf(m_cMesg, "%d, %d, %d \n", m_iDutyCycle, m_iCounter, m_iRw3Current);
         UART5_printString(m_cMesg);
