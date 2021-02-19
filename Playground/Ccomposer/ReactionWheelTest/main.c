@@ -80,28 +80,31 @@ float m_fAX, m_fAY, m_fAZ, m_ft, m_fGX, m_fGY, m_fGZ;       // MPU6050 Data
 volatile unsigned int m_iCounter = 0;                       // Encoder counter
 volatile unsigned int m_iRw3Current;                        // ADC Current
 char m_cMesg[100];                                          // Buffer to send
-int m_iDutyCycle =  4999;                                   // PWM duty cycle
 int m_iMode = 0;                                            // Mode variable
 
 //Filter variables (Mobile Average Filter)
 const int m_iWindowSize = 20;            // Window size
 volatile unsigned int m_ix[20];          // Buffer to store past outputs
 
+//Speed command variables
+int m_iDutyCycleZ =  4999;       // PWM duty cycle RW1 (Z axis)
+int m_iDutyCycleX =  4999;       // PWM duty cycle RW2 (X axis)
+int m_iDutyCycleY =  4999;       // PWM duty cycle RW3 (Y axis)
+
 //---------------------MAIN PROGRAM---------------------
 int main(void){
-  I2c1_begin();
+  I2c1_begin();             // Initialize I2C port
   Delay(1000);
-  Uart5_begin();
-  MPU6050_Init();
+  Uart5_begin();            // Initialize UART port
+  MPU6050_Init();           // Initialize MPU6050
   Delay(1000);
-  initDirectionPins();
-  enable_PWM();
-  timerA2Init();
+  initDirectionPins();      // Initialize direction Pins
+  enable_PWM();             // Enable PWM
+  //timerA2Init();
   initTimer1Aint();
-  adc0Initialization();
+  //adc0Initialization();
 
   while(1){
-
       //Do something
   }
 }
@@ -222,12 +225,14 @@ void UART5_Handler(void){
         GPIO_PORTA_DATA_R |= (1<<4);
     }else if(rx_data == 'B'){
         GPIO_PORTA_DATA_R &= ~(1<<4);
-    }else if(rx_data == '1'){           // Step OFF
+    }else if(rx_data == '0'){           // Step OFF
         m_iMode = 0;
-    }else if(rx_data == '2'){           // Step ON
+    }else if(rx_data == '1'){           // Step ON
         m_iMode = 1;
-    }else if(rx_data == '3'){           // Ramp (torque step)
+    }else if(rx_data == '2'){           // Ramp (torque step)
         m_iMode = 2;
+    }else if(rx_data == '3'){           // Ramp (torque step)
+        m_iMode = 3;
     }
 
     //UART5_Transmitter(rx_data); // send data that is received
@@ -379,43 +384,72 @@ void Delay(unsigned long counter){
     for(i=0; i< counter*10000; i++);
 }
 
+/* void enable_PWM(void)
+ * Description:
+ * This function initialize the PWM ports for every reaction wheel
+ * the pines are distributed in the following array:
+ * PF0(M1PWM5) ---> RW1 (Z axis)
+ * PF2(M1PWM6) ---> RW2 (X axis)
+ * PF3(M1PWM7) ---> RW3 (Y axis)
+ */
 void enable_PWM(void){
     // Clock setting for PWM and GPIO PORT
-    SYSCTL_RCGCPWM_R |= (1<<1);         // Enable clock to PWM1 module
-    SYSCTL_RCGCGPIO_R |= (1<<5);        // Enable system clock to PORTF
+    SYSCTL_RCGCPWM_R |= (1<<1);            // Enable clock to PWM1 module
+    while((SYSCTL_PRPWM_R & (1<<1))==0);   // Wait until clock is initialized
+    SYSCTL_RCGCGPIO_R |= (1<<5);           // Enable system clock to PORTF
+    while((SYSCTL_PRGPIO_R & (1<<5))==0);  // Wait until clock is initialized
+
     SYSCTL_RCC_R |= (1<<20);            // Enable System Clock Divisor function
-    SYSCTL_RCC_R |= (7<<17);            // Use pre-divider value of 64 and after that feed clock to PWM1 module
+    SYSCTL_RCC_R |= 0x000E0000;         // Use pre-divider value of 64
 
-    // Setting of PF2 pin for M1PWM6 channel output pin
-    GPIO_PORTF_AFSEL_R |= (1<<2);       // PF2 sets a alternate function
-    GPIO_PORTF_PCTL_R &= ~0x00000F00;   // Set PF2 as output pin
-    GPIO_PORTF_PCTL_R |= 0x00000500;    // Make PF2 PWM output pin
-    GPIO_PORTF_DEN_R |= (1<<2);         // set PF2 as a digital pin
+    // PF0 has special function, need to unlock to modify
+    GPIO_PORTF_LOCK_R = GPIO_LOCK_KEY;   // Unlock commit register
+    GPIO_PORTF_CR_R = 0X1F;              // Make PORTF0 configurable
+    GPIO_PORTF_LOCK_R  = 0;           // Lock commit register
 
+    // Setting of PF0, PF2 and PF3 as M1PWM5, M1PWM6, M1PWM7 channels
+    GPIO_PORTF_AFSEL_R |= (1<<0)|(1<<2)|(1<<3);     // Sets an alternate function
+    GPIO_PORTF_PCTL_R &= ~0x0000FF0F;               // Set PF0, PF2 and PF3 as output pin
+    GPIO_PORTF_PCTL_R |= 0x00005505;                // Make PF0, PF2 and PF3 PWM output pin
+    GPIO_PORTF_DEN_R |= (1<<0)|(1<<2)|(1<<3);       // set PF0, PF2 and PF3 digital pines
+
+    // Enable PWM Generator 3 A and B
     PWM1_3_CTL_R &= ~(1<<0);            // Disable Generator 3 counter
     PWM1_3_CTL_R &= ~(1<<1);            // Select down count mode of counter 3
     PWM1_3_GENA_R = 0x0000008C;         // Set PWM output when counter reloaded and clear when matches PWMCMPA
-    PWM1_3_LOAD_R = 5000;               // Set load value for 50Hz 16MHz/65 = 250kHz and (250KHz/5000)
-    PWM1_3_CMPA_R = 4999;               // Set duty cycle to to minimum value
+    PWM1_3_GENB_R = 0x0000080C;         // Set PWM output when counter reloaded and clear when matches PWMCMPA
+    PWM1_3_LOAD_R = 5000;               // Set load value for 50Hz (16MHz/65 = 250kHz/5000 = 50Hz).
+    PWM1_3_CMPA_R = 4999;              // Set duty cycle to to minimum value
+    PWM1_3_CMPB_R = 200;              // Set duty cycle to to minimum value
     PWM1_3_CTL_R = 1;                   // Enable Generator 3 counter
-    PWM1_ENABLE_R = 0x40;               // Enable PWM1 channel 6 output
+
+    // Enable PWM Generator2 A
+    PWM1_2_CTL_R &= ~(1<<0);            // Disable Generator 2 counter
+    PWM1_2_CTL_R &= ~(1<<1);            // Select down count mode of counter 2
+    PWM1_2_GENA_R = 0x0000008C;         // Set PWM output when counter reloaded and clear when matches PWMCMPA
+    PWM1_2_LOAD_R = 5000;               // Set load value for 50Hz (16MHz/65 = 250kHz/5000 = 50Hz).
+    PWM1_2_CMPA_R = 4999;               // Set duty cycle to to minimum value
+    PWM1_2_CTL_R = 1;                   // Enable Generator 3 counter
+
+    PWM1_ENABLE_R = (1<<4)|(1<<6)|(1<<7);  // Enable PWM1 channels 4,6,7 output
 }
 
+/* void initDirectionPins(void)
+ * Description:
+ * This function initialize the CCW/CW ports for every reaction wheel
+ * the pines are distributed in the following array:
+ * PA4 ---> RW1 (Z axis)
+ * PA5 ---> RW2 (X axis)
+ * PA6 ---> RW3 (Y axis)
+ */
 void initDirectionPins(void){
     // Clock setting for PortA
     SYSCTL_RCGCGPIO_R |= (1<<0);            // Enable clock
     while((SYSCTL_PRGPIO_R & (1<<0))==0);   // Wait until clock is enable
 
-    //Initialize PA2, PA3, PA4  as a digital outputs
-    GPIO_PORTA_DIR_R |= (1<<4)|(1<<3)|(1<<2);    // Set PA2, PA3, PA4 as outputs
-    GPIO_PORTA_DEN_R |= (1<<4)|(1<<3)|(1<<2);    // make PORTA4-2 digital pins
-
-    // Clock Setting for PortF0
-    SYSCTL_RCGCGPIO_R |= (1<<5);            // Enable clock
-    while((SYSCTL_PRGPIO_R & (1<<5))==0);   // Wait until clock is enable
-    //Initialize PF3 as a digital output
-    GPIO_PORTF_DIR_R |= (1<<3);    // Set PF0 as output
-    GPIO_PORTF_DEN_R |= (1<<3);    // make PF0 digital pin
+    //Initialize PA4, PA5, PA6  as a digital outputs
+    GPIO_PORTA_DIR_R |= (1<<4)|(1<<5)|(1<<6);    // Set PA4, PA5, PA6 as outputs
+    GPIO_PORTA_DEN_R |= (1<<4)|(1<<5)|(1<<6);    // make PORTA4-6 digital pins
 }
 
 void initTimer1Aint(void){
@@ -425,6 +459,7 @@ void initTimer1Aint(void){
     TIMER1_CFG_R = 0x4;            // Select 16-bit configuration option
     TIMER1_TAMR_R = 0x02;          // Select periodic down counter mode of timer1
     TIMER1_TAPR_R = 250-1;         // TimerA prescaler value 250 (64KHz)
+    //TIMER1_TAILR_R = 32-1 ;     // TimerA counter starting count down value from 1ms
     TIMER1_TAILR_R = 12800-1 ;     // TimerA counter starting count down value from 200ms
     //TIMER1_TAILR_R = 64000-1 ;     // TimerA counter starting count down value from 1s
     TIMER1_ICR_R = 0x1;            // TimerA timeout flag bit clears
@@ -438,34 +473,52 @@ void initTimer1Aint(void){
 void timerA1Handler(void){
     if(TIMER1_MIS_R & 0x01){
         // Toggle blue led
-        GPIO_PORTF_DATA_R ^= (1<<3);
+        //GPIO_PORTF_DATA_R ^= (1<<3);
 
         // Read timer2 counter to measure RPM
         //m_iCounter = timerA2Capture()*1.6947;     // If fs = 1s
-        m_iCounter = timerA2Capture()*8.4735;       // If fs = 0.2s
-        TIMER2_CTL_R &= ~1;             // Disable TIMER2A
-        TIMER2_TAV_R = 0;
-        TIMER2_TAR_R = 0;
+        //m_iCounter = timerA2Capture()*8.4735;       // If fs = 0.2s
+        //m_iCounter = timerA2Capture()*18*2*3.14/60;       // If fs = 0.1s rad/s
+   //     m_iCounter = timerA2Capture();       // If fs = 0.1s rad/s
+   //     TIMER2_CTL_R &= ~1;             // Disable TIMER2A
+   //     TIMER2_TAV_R = 0;
+   //     TIMER2_TAR_R = 0;
 
-        // Perform PWM duty cicle
-        if (m_iMode == 0){
-            m_iDutyCycle = 0;
-        } else if(m_iMode == 1){
-            m_iDutyCycle = 4999;
-        } else if(m_iMode == 2){
-            m_iDutyCycle = m_iDutyCycle - 10;
-           if (m_iDutyCycle <= 0)
-               m_iDutyCycle = 5000;
+        // Perform PWM duty cycle
+        if(m_iMode == 0){
+          m_iDutyCycleX = 4999;
+          m_iDutyCycleY = 0;
+          m_iDutyCycleZ = 0;
+        } else if (m_iMode == 1){
+            m_iDutyCycleX = 0;
+            m_iDutyCycleY =4999;
+            m_iDutyCycleZ = 0;
+        } else if (m_iMode == 2){
+            m_iDutyCycleX = 0;
+            m_iDutyCycleY = 0;
+            m_iDutyCycleZ = 4999;
+        } else if (m_iMode == 3){
+           m_iDutyCycleX = m_iDutyCycleX - 10;
+           m_iDutyCycleY = m_iDutyCycleY - 10;
+           m_iDutyCycleZ = m_iDutyCycleZ - 10;
+           if (m_iDutyCycleX <= 0)
+               m_iDutyCycleX = 5000;
+           else if (m_iDutyCycleY <= 0)
+               m_iDutyCycleY = 5000;
+           else if (m_iDutyCycleZ <= 0)
+               m_iDutyCycleZ = 5000;
         }
 
-        PWM1_3_CMPA_R = m_iDutyCycle;
+        // Send Speed Command
+        PWM1_3_CMPA_R = m_iDutyCycleX;
+        PWM1_3_CMPB_R = m_iDutyCycleY;
+        PWM1_2_CMPA_R = m_iDutyCycleZ;
 
-
-
-        sprintf(m_cMesg, "%d, %d, %d \n", m_iDutyCycle, m_iCounter, m_iRw3Current);
+        //sprintf(m_cMesg, "%d, %d, %d \n", m_iDutyCycleZ, m_iCounter, m_iRw3Current);
+        sprintf(m_cMesg, "%d, %d, %d \n", m_iDutyCycleX, m_iDutyCycleY, m_iDutyCycleZ);
         UART5_printString(m_cMesg);
 
-        TIMER2_CTL_R |= 1;             // Enable TIMER3A
+    //    TIMER2_CTL_R |= 1;             // Enable TIMER3A
     }
 
     TIMER1_ICR_R = 0X01;                // TA1 Timeout flag
@@ -474,14 +527,14 @@ void timerA1Handler(void){
 void timerA2Init(void){
     //Enable timer3A and portB
     SYSCTL_RCGCTIMER_R |= (1<<2);  // Enable clock to Timer 2
-    SYSCTL_RCGCGPIO_R |= (1<<1);   // Enable clock to PORTB
+    SYSCTL_RCGCGPIO_R |= (1<<4);   // Enable clock to PORTF
 
-    //Enable PB0
-    GPIO_PORTB_DIR_R &= ~(1<<0);   // Make PB0 an input pin
-    GPIO_PORTB_DEN_R |= (1<<0);    // Make PB0 a digital pin
-    GPIO_PORTB_AFSEL_R |= (1<<0);  // Enable alternate function on PB0
-    GPIO_PORTB_PCTL_R &= ~0x0000000F;  // Configure PB0 as T2CCP0 pin
-    GPIO_PORTB_PCTL_R |= 0x000000007;
+    //Enable PF4
+    GPIO_PORTF_DIR_R &= ~(1<<4);   // Make PF4 an input pin
+    GPIO_PORTF_DEN_R |= (1<<4);    // Make PF4 a digital pin
+    GPIO_PORTF_AFSEL_R |= (1<<4);  // Enable alternate function on PF4
+    GPIO_PORTF_PCTL_R &= ~0x000F0000;  // Configure PF4 as T2CCP0 pin
+    GPIO_PORTF_PCTL_R |= 0x000070000;
 
     //Set timer as input-edge counter mode
     TIMER2_CTL_R &= ~(1<<0);        // Disable TIMER2A in setup
@@ -489,7 +542,8 @@ void timerA2Init(void){
     TIMER2_TAMR_R = 0x13;           // Up-count, edge-count, capture mode
     TIMER2_TAMATCHR_R = 0xFFFF;     // Set the count limit
     TIMER2_TAPMR_R = 0xFF;          // To 0xFFFFFF with prescaler
-    TIMER2_CTL_R |= ~(1<<3)|~(1<<2);    // Capture the rising edge
+    TIMER2_CTL_R &= ~(1<<3);        // Capture the rising edge
+    TIMER2_CTL_R &= ~(1<<2);        // Capture the rising edge
     TIMER2_CTL_R |= 0x01;               // Enable Timer2A
 }
 
