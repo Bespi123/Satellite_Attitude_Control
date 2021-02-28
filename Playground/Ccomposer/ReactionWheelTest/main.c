@@ -60,13 +60,18 @@ void UART5_Transmitter(unsigned char data);
 bool MPU6050_Init(void);
 void MPU6050_getData(int16_t *MPURawData);
 
-// Timer Functions
-void timerA2Init(void);
+// Counter Timer Functions
+void countersInit(void);
 int timerA2Capture(void);
+int timerA0Capture(void);
+int timerB0Capture(void);
+
+// Timer interruption
 void initTimer1Aint(void);
+void Timer2A_Handler(void);
 
 // ADC Initialization
-void adc0Initialization(void);
+void adcInitialization(void);
 
 //PWM Functions
 void enable_PWM(void);
@@ -77,7 +82,6 @@ void Delay(unsigned long counter);
 //----------------PROGRAM GLOBAL VARIABLES--------------
 int16_t m_iMpuRawData[7];                                   // MPU6050 raw data
 float m_fAX, m_fAY, m_fAZ, m_ft, m_fGX, m_fGY, m_fGZ;       // MPU6050 Data
-volatile unsigned int m_iCounter = 0;                       // Encoder counter
 volatile unsigned int m_iRw3Current;                        // ADC Current
 char m_cMesg[100];                                          // Buffer to send
 int m_iMode = 0;                                            // Mode variable
@@ -91,6 +95,15 @@ int m_iDutyCycleZ =  4999;       // PWM duty cycle RW1 (Z axis)
 int m_iDutyCycleX =  4999;       // PWM duty cycle RW2 (X axis)
 int m_iDutyCycleY =  4999;       // PWM duty cycle RW3 (Y axis)
 
+//Speed measure from encoders
+volatile unsigned int m_iCounterX = 0;   // Encoder counter (X axis)
+volatile unsigned int m_iCounterY = 0;   // Encoder counter (Y axis)
+volatile unsigned int m_iCounterZ = 0;   // Encoder counter (Z axis)
+
+uint32_t Period;        // 24-bit, 12.5 ns units
+uint32_t static First;  // Timer0A first edge, 12.5 ns units
+int32_t Done;           // mailbox status set each rising
+
 //---------------------MAIN PROGRAM---------------------
 int main(void){
   I2c1_begin();             // Initialize I2C port
@@ -98,11 +111,11 @@ int main(void){
   Uart5_begin();            // Initialize UART port
   MPU6050_Init();           // Initialize MPU6050
   Delay(1000);
-  initDirectionPins();      // Initialize direction Pins
-  enable_PWM();             // Enable PWM
-  //timerA2Init();
+  initDirectionPins();      // Initialize CW/CCW Pines
+  enable_PWM();             // Enable PWM channels
+  countersInit();           // Initialize timer counters for encoders
   initTimer1Aint();
-  //adc0Initialization();
+  adcInitialization();
 
   while(1){
       //Do something
@@ -405,7 +418,7 @@ void enable_PWM(void){
     // PF0 has special function, need to unlock to modify
     GPIO_PORTF_LOCK_R = GPIO_LOCK_KEY;   // Unlock commit register
     GPIO_PORTF_CR_R = 0X1F;              // Make PORTF0 configurable
-    GPIO_PORTF_LOCK_R  = 0;           // Lock commit register
+    GPIO_PORTF_LOCK_R  = 0;              // Lock commit register
 
     // Setting of PF0, PF2 and PF3 as M1PWM5, M1PWM6, M1PWM7 channels
     GPIO_PORTF_AFSEL_R |= (1<<0)|(1<<2)|(1<<3);     // Sets an alternate function
@@ -417,10 +430,10 @@ void enable_PWM(void){
     PWM1_3_CTL_R &= ~(1<<0);            // Disable Generator 3 counter
     PWM1_3_CTL_R &= ~(1<<1);            // Select down count mode of counter 3
     PWM1_3_GENA_R = 0x0000008C;         // Set PWM output when counter reloaded and clear when matches PWMCMPA
-    PWM1_3_GENB_R = 0x0000080C;         // Set PWM output when counter reloaded and clear when matches PWMCMPA
+    PWM1_3_GENB_R = 0x0000080C;         // Set PWM output when counter reloaded and clear when matches PWMCMPB
     PWM1_3_LOAD_R = 5000;               // Set load value for 50Hz (16MHz/65 = 250kHz/5000 = 50Hz).
-    PWM1_3_CMPA_R = 4999;              // Set duty cycle to to minimum value
-    PWM1_3_CMPB_R = 200;              // Set duty cycle to to minimum value
+    PWM1_3_CMPA_R = 4999;               // Set duty cycle to to minimum value
+    PWM1_3_CMPB_R = 200;                // Set duty cycle to to minimum value
     PWM1_3_CTL_R = 1;                   // Enable Generator 3 counter
 
     // Enable PWM Generator2 A
@@ -431,6 +444,7 @@ void enable_PWM(void){
     PWM1_2_CMPA_R = 4999;               // Set duty cycle to to minimum value
     PWM1_2_CTL_R = 1;                   // Enable Generator 3 counter
 
+    // Enable PWM channels
     PWM1_ENABLE_R = (1<<4)|(1<<6)|(1<<7);  // Enable PWM1 channels 4,6,7 output
 }
 
@@ -460,8 +474,8 @@ void initTimer1Aint(void){
     TIMER1_TAMR_R = 0x02;          // Select periodic down counter mode of timer1
     TIMER1_TAPR_R = 250-1;         // TimerA prescaler value 250 (64KHz)
     //TIMER1_TAILR_R = 32-1 ;     // TimerA counter starting count down value from 1ms
-    TIMER1_TAILR_R = 12800-1 ;     // TimerA counter starting count down value from 200ms
-    //TIMER1_TAILR_R = 64000-1 ;     // TimerA counter starting count down value from 1s
+    //TIMER1_TAILR_R = 12800-1 ;     // TimerA counter starting count down value from 200ms
+    TIMER1_TAILR_R = 64000-1 ;     // TimerA counter starting count down value from 1s
     TIMER1_ICR_R = 0x1;            // TimerA timeout flag bit clears
 
     // Enable timer 1 interrupt
@@ -475,14 +489,30 @@ void timerA1Handler(void){
         // Toggle blue led
         //GPIO_PORTF_DATA_R ^= (1<<3);
 
-        // Read timer2 counter to measure RPM
-        //m_iCounter = timerA2Capture()*1.6947;     // If fs = 1s
-        //m_iCounter = timerA2Capture()*8.4735;       // If fs = 0.2s
-        //m_iCounter = timerA2Capture()*18*2*3.14/60;       // If fs = 0.1s rad/s
-   //     m_iCounter = timerA2Capture();       // If fs = 0.1s rad/s
-   //     TIMER2_CTL_R &= ~1;             // Disable TIMER2A
-   //     TIMER2_TAV_R = 0;
-   //     TIMER2_TAR_R = 0;
+        // Read MPU6050 in a burst of data
+        MPU6050_getData(m_iMpuRawData);
+
+        // Convert the readings
+        m_fAX = (float)m_iMpuRawData[0]/16384.0;
+        m_fAY = (float)m_iMpuRawData[1]/16384.0;
+        m_fAZ = (float)m_iMpuRawData[2]/16384.0;
+        m_fGX = (float)m_iMpuRawData[4]/131.0;
+        m_fGY = (float)m_iMpuRawData[5]/131.0;
+        m_fGZ = (float)m_iMpuRawData[6]/131.0;
+
+        // Read encoders to measure RPM
+        m_iCounterZ = timerA2Capture();       // Read encoder
+        TIMER2_CTL_R &= ~1;                   // Disable TIMER2A
+        TIMER2_TAV_R = 0;
+        TIMER2_TAR_R = 0;
+        m_iCounterX = timerA0Capture();       // Read encoder
+        TIMER0_CTL_R &= ~1;                   // Disable TIMER0A
+        TIMER0_TAV_R = 0;
+        TIMER0_TAR_R = 0;
+        m_iCounterY = timerB0Capture();       // Read encoder
+        TIMER0_CTL_R &= ~(1<<8);              // Disable TIMER0B
+        TIMER0_TBV_R = 0;
+        TIMER0_TBR_R = 0;
 
         // Perform PWM duty cycle
         if(m_iMode == 0){
@@ -496,16 +526,20 @@ void timerA1Handler(void){
         } else if (m_iMode == 2){
             m_iDutyCycleX = 0;
             m_iDutyCycleY = 0;
-            m_iDutyCycleZ = 4999;
+            m_iDutyCycleZ = 0;
+            //m_iDutyCycleZ = 4999;
         } else if (m_iMode == 3){
-           m_iDutyCycleX = m_iDutyCycleX - 10;
-           m_iDutyCycleY = m_iDutyCycleY - 10;
-           m_iDutyCycleZ = m_iDutyCycleZ - 10;
-           if (m_iDutyCycleX <= 0)
-               m_iDutyCycleX = 5000;
-           else if (m_iDutyCycleY <= 0)
-               m_iDutyCycleY = 5000;
-           else if (m_iDutyCycleZ <= 0)
+           //m_iDutyCycleX = m_iDutyCycleX - 10;
+           //m_iDutyCycleY = m_iDutyCycleY - 10;00
+            m_iDutyCycleX = 0;
+            m_iDutyCycleY = 0;
+            m_iDutyCycleZ = m_iDutyCycleZ - 10;
+           //if (m_iDutyCycleX <= 0)
+           //    m_iDutyCycleX = 5000;
+           //else if (m_iDutyCycleY <= 0)
+           //    m_iDutyCycleY = 5000;
+           //else
+           if (m_iDutyCycleZ <= 0)
                m_iDutyCycleZ = 5000;
         }
 
@@ -514,25 +548,40 @@ void timerA1Handler(void){
         PWM1_3_CMPB_R = m_iDutyCycleY;
         PWM1_2_CMPA_R = m_iDutyCycleZ;
 
-        //sprintf(m_cMesg, "%d, %d, %d \n", m_iDutyCycleZ, m_iCounter, m_iRw3Current);
-        sprintf(m_cMesg, "%d, %d, %d \n", m_iDutyCycleX, m_iDutyCycleY, m_iDutyCycleZ);
+        //sprintf(m_cMesg, "%d, %d, %d \n", m_iDutyCycleZ, m_iCounterZ, m_iRw3Current);
+        sprintf(m_cMesg, "%.2f, %.2f, %.2f, %.2f, %.2f, %.2f, %d, %d, %d\n", m_fAX, m_fAY, m_fAZ, m_fGX, m_fGY, m_fGZ, m_iRw3Current, m_iDutyCycleZ, m_iCounterZ);
+        //sprintf(m_cMesg, "%d, %d, %d \n", m_iDutyCycleX, m_iDutyCycleY, m_iDutyCycleZ);
+        //sprintf(m_cMesg, "%d, %d, %d \n", Period, m_iDutyCycleY, m_iDutyCycleZ);
         UART5_printString(m_cMesg);
 
-    //    TIMER2_CTL_R |= 1;             // Enable TIMER3A
+        TIMER2_CTL_R |= (1<<0);             // Enable TIMER2A
+        TIMER0_CTL_R |= (1<<0);             // Enable TIMER0A
+        TIMER0_CTL_R |= (1<<8);             // Enable TIMER0B
     }
 
     TIMER1_ICR_R = 0X01;                // TA1 Timeout flag
 }
 
-void timerA2Init(void){
-    //Enable timer3A and portB
-    SYSCTL_RCGCTIMER_R |= (1<<2);  // Enable clock to Timer 2
-    SYSCTL_RCGCGPIO_R |= (1<<4);   // Enable clock to PORTF
+/* void countersInit(void)
+ * Description:
+ * This function initialize timers as counter capture mode to read reaction
+ * wheels rates.
+ * the pines and timers are distributed in the following array:
+ * PF4 (TIMER2A) ---> RW1 (Z axis)
+ * PB6 (TIMER0A) ---> RW2 (X axis)
+ * PB7 (TIMER0B) ---> RW3 (Y axis)
+ */
+void countersInit(void){
+    //Enable timer2A and portF
+    SYSCTL_RCGCTIMER_R |= (1<<2);           // Enable clock to Timer 2
+    while((SYSCTL_PRTIMER_R & (1<<2))==0);  // Wait until clock is initialized
+    SYSCTL_RCGCGPIO_R |= (1<<4);            // Enable clock to PORTF
+    while((SYSCTL_PRGPIO_R & (1<<4))==0);   // Wait until clock is initialized
 
     //Enable PF4
-    GPIO_PORTF_DIR_R &= ~(1<<4);   // Make PF4 an input pin
-    GPIO_PORTF_DEN_R |= (1<<4);    // Make PF4 a digital pin
-    GPIO_PORTF_AFSEL_R |= (1<<4);  // Enable alternate function on PF4
+    GPIO_PORTF_DIR_R &= ~(1<<4);       // Make PF4 an input pin
+    GPIO_PORTF_DEN_R |= (1<<4);        // Make PF4 a digital pin
+    GPIO_PORTF_AFSEL_R |= (1<<4);      // Enable alternate function on PF4
     GPIO_PORTF_PCTL_R &= ~0x000F0000;  // Configure PF4 as T2CCP0 pin
     GPIO_PORTF_PCTL_R |= 0x000070000;
 
@@ -544,38 +593,129 @@ void timerA2Init(void){
     TIMER2_TAPMR_R = 0xFF;          // To 0xFFFFFF with prescaler
     TIMER2_CTL_R &= ~(1<<3);        // Capture the rising edge
     TIMER2_CTL_R &= ~(1<<2);        // Capture the rising edge
-    TIMER2_CTL_R |= 0x01;               // Enable Timer2A
+    TIMER2_CTL_R |= 0x01;           // Enable Timer2A
+
+    //Enable timer0 and portB
+    SYSCTL_RCGCTIMER_R |= (1<<0);           // Enable clock to Timer 0
+    while((SYSCTL_PRTIMER_R & (1<<0))==0);  // Wait until clock is initialized
+    SYSCTL_RCGCGPIO_R |= (1<<1);            // Enable clock to PORTB
+    while((SYSCTL_PRGPIO_R & (1<<1))==0);   // Wait until clock is initialized
+
+    //Enable PB6 - PB7
+    GPIO_PORTB_DIR_R &= ~((1<<6) | (1<<7));   // Make PB6, PB7 an input pin
+    GPIO_PORTB_DEN_R |= (1<<6) | (1<<7);      // Make PB6, PB7 a digital pin
+    GPIO_PORTB_AFSEL_R |= (1<<6) | (1<<7);    // Enable alternate function on PB6, PB7
+    GPIO_PORTB_PCTL_R &= ~0xFF000000;         // Configure PB6 as T0CCP0
+    GPIO_PORTB_PCTL_R |= 0x77000000;
+
+    //Set timer as input-edge counter mode
+    TIMER0_CTL_R &= ~(1<<0);        // Disable TIMER0A in setup0
+    TIMER0_CTL_R &= ~(1<<8);        // Disable TIMER0B in setup
+    TIMER0_CFG_R |= (1<<2);         // Configure as 16-bit timer mode
+    TIMER0_TAMR_R = 0x13;           // Up-count, edge-count, capture mode TIMER A
+    TIMER0_TBMR_R = 0x13;           // Up-count, edge-count, capture mode TIMER B
+    TIMER0_TAMATCHR_R = 0xFFFF;     // Set the count limit TIMER A
+    TIMER0_TBMATCHR_R = 0xFFFF;     // Set the count limit TIMER B
+    TIMER0_TAPMR_R = 0xFF;          // To 0xFFFFFF with prescaler TIMER A
+    TIMER0_TBPMR_R = 0xFF;          // To 0xFFFFFF with prescaler TIMER B
+    TIMER0_CTL_R &= ~((1<<3)|(1<<2));          // Capture the rising edge TIMER A
+    TIMER0_CTL_R &= ~((1<<11)|(1<<10));        // Capture the rising edge TIMER B
+    TIMER0_CTL_R |= (1<<0);         // Enable Timer0A
+    TIMER0_CTL_R |= (1<<8);         // Enable Timer0B
+
+/*
+    //Enable timer2A and Port F
+    SYSCTL_RCGCTIMER_R |= (1<<2);           // Enable clock to Timer 2
+    while((SYSCTL_PRTIMER_R & (1<<2))==0);  // Wait until clock is initialized
+    SYSCTL_RCGCGPIO_R |= (1<<4);            // Enable clock to PORTF
+    while((SYSCTL_PRGPIO_R & (1<<4))==0);   // Wait until clock is initialized
+
+    //Enable PF4
+    GPIO_PORTF_DIR_R &= ~(1<<4);   // Make PF4 an input pin
+    GPIO_PORTF_DEN_R |= (1<<4);    // Make PF4 a digital pin
+    GPIO_PORTF_AFSEL_R |= (1<<4);  // Enable alternate function on PF4
+    GPIO_PORTF_PCTL_R &= ~0x000F0000;  // Configure PF4 as T2CCP0 pin
+    GPIO_PORTF_PCTL_R |= 0x000070000;  // Configure PF4 as T2CCP0 pin
+
+    //Set timer as input-edge time mode
+    TIMER2_CTL_R &= ~(1<<0);               // Disable TIMER2A in setup
+    TIMER2_CFG_R |= (1<<2);                // Configure as 16-bit timer mode
+    TIMER2_TAMR_R = 0x07;                  // Count down, edge time capture mode
+    TIMER2_CTL_R &= ~((1<<3)|(1<<2));      // Capture rising edge
+    TIMER2_TAILR_R = 0x0000FFFF;           // Start value
+    TIMER2_TAPR_R = 0xFF;                  // Activate Pre-scaler, creating 24-bit
+    TIMER2_IMR_R |= (1<<2);                // Enable capture match interrupt
+    TIMER2_ICR_R = (1<<2);                 // Clear timer2A capture match flag
+    TIMER2_CTL_R |= 0x00000001;            // Enable Timer2A 24-b, +edge, interrupts
+
+    //Enable interrupt
+    NVIC_PRI5_R = (NVIC_PRI5_R&0x00FFFFFF)|0x40000000;  //Timer2A=priority 2
+    NVIC_EN0_R = 1<<23;                     // Enable interrupt 23 in NVIC
+*/
 }
 
 int timerA2Capture(void){
     return TIMER2_TAR_R;
 }
 
-void adc0Initialization(void){
-    // Enable Clock to ADC4 and GPIO pins
-    SYSCTL_RCGCGPIO_R |= (1<<3);   // Enable Clock to GPIOD or PD3/AN4
-    SYSCTL_RCGCADC_R  |= (1<<0);   // Module ADC0 clock enable
+int timerA0Capture(void){
+    return TIMER0_TAR_R;
+}
 
-    // Initialize PD3 for \AIN4 input
-    GPIO_PORTD_DIR_R &= ~(1<<3);   // Make PD3 input
-    GPIO_PORTD_AFSEL_R |= (1<<3);  // Enable alternate function
-    GPIO_PORTD_DEN_R &= ~(1<<3);   // Disable digital function
-    GPIO_PORTD_AMSEL_R |= (1<<3);  // Enable analog function
+int timerB0Capture(void){
+    return TIMER0_TBR_R;
+}
+
+void Timer2A_Handler(void){
+    TIMER2_ICR_R = (1<<2);                          // acknowledge timer0A capture
+    Period = (First - TIMER2_TAR_R)&0x00FFFFFF;     // 62.5ns resolution
+    First = TIMER2_TAR_R;                           // setup for next
+    Done = 1;                                       // set semaphore
+}
+
+/* void adcInitialization(void)
+ * Description:
+ * This function initialize adc in sequence 3 to read current consumption of
+ * wheels rates.
+ * the pines and timers are distributed in the following array:
+ * PD3 (AIN4) ---> RW1 (Z axis)
+ * PE1 (AIN2) ---> RW2 (X axis)
+ * PE2 (AIN1) ---> RW3 (Y axis)
+ */
+void adcInitialization(void){
+    // Enable Clock to ADC0 and GPIO pins
+    SYSCTL_RCGCGPIO_R |= (1<<3);             // Enable Clock to GPIOD or PD3
+    while((SYSCTL_PRGPIO_R & (1<<3))==0);    // Wait until clock is initialized
+    SYSCTL_RCGCGPIO_R |= (1<<4);             // Enable Clock to GPIOE for PE1, PE2
+    while((SYSCTL_PRGPIO_R & (1<<4))==0);    // Wait until clock is initialized
+    SYSCTL_RCGCADC_R  |= (1<<0);             // Module ADC0 clock enable
+    while((SYSCTL_PRADC_R & (1<<0))==0);     // Wait until clock is initialized
+
+    // Initialize PD3 for AIN4 input
+    GPIO_PORTD_DIR_R &= ~(1<<3);            // Make PD3 input
+    GPIO_PORTD_AFSEL_R |= (1<<3);           // Enable alternate function
+    GPIO_PORTD_DEN_R &= ~(1<<3);            // Disable digital function
+    GPIO_PORTD_AMSEL_R |= (1<<3);           // Enable analog function
+
+    // Initialize PE1, PE2 for AIN1, AIN2 input
+    GPIO_PORTE_DIR_R &= ~((1<<1)|(1<<2));   // Make PE1, PE2 input
+    GPIO_PORTE_AFSEL_R |= (1<<1) | (1<<2);  // Enable alternate function
+    GPIO_PORTE_DEN_R &= ~((1<<1)|(1<<2));   // Disable digital function
+    GPIO_PORTE_AMSEL_R |= (1<<1) | (1<<2);  // Enable analog function
 
     // Initialize sample sequencer3
-    //ADC0_PC_R = (1<<0);           // Configure for 125k samples/sec
-    ADC0_SSPRI_R = 0X3210;        // Seq0 is highest, seq3 lowest priority
-    ADC0_ACTSS_R &= ~(1<<3);      // Disable SS3 during configuration
-    ADC0_EMUX_R &= ~0xF000;       // Software trigger conversion
-    //ADC0_SSMUX3_R = 4;          // Get input from channel 4
-    ADC0_SSMUX3_R = 4;            // Get input from channel 4
-    ADC0_SSCTL3_R |= (1<<1)|(1<<2);   // Take one sample at a time, set flag at 1st sample
+    //ADC0_PC_R = (1<<0);                   // Configure for 125k samples/sec
+    ADC0_SSPRI_R = 0X3210;                  // Seq0 is highest, seq3 lowest priority
+    ADC0_ACTSS_R &= ~(1<<3);                // Disable SS3 during configuration
+    ADC0_EMUX_R &= ~0xF000;                 // Software trigger conversion
+    ADC0_SSMUX3_R = 4;                      // Get input from channel 4
+    ADC0_SSCTL3_R |= (1<<1)|(1<<2);         // Take one sample at a time, set flag at 1st sample
 
     // Enable ADC Interrupt
-    ADC0_IM_R |= (1<<3);            // Unmask ADC4 sequence 3 interrupt
-    NVIC_EN0_R |= (1<<17);           // Enable IRQ17 for ADC0SS3
-    ADC0_ACTSS_R |= (1<<3);         // Enable ADC0 sequencer 3
-    ADC0_PSSI_R |= (1<<3);          // Enable SS3 conversion or start sampling data from AN0
+    ADC0_IM_R |= (1<<3);                    // Unmask ADC4 sequence 3 interrupt
+    NVIC_EN0_R |= (1<<17);                  // Enable IRQ17 for ADC0SS3
+    ADC0_ACTSS_R |= (1<<3);                 // Enable ADC0 sequencer 3
+    ADC0_PSSI_R |= (1<<3);                  // Enable SS3 conversion or start sampling data from AN0
 }
 
 void ADC0SS3_Handler(void){
