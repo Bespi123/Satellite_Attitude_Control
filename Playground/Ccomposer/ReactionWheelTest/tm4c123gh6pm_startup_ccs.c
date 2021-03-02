@@ -33,9 +33,12 @@ void ResetISR(void);
 static void NmiSR(void);
 static void FaultISR(void);
 static void IntDefaultHandler(void);
-void timerA1Handler(void);
 void UART5_Handler(void);
-void ADC0SS3_Handler(void);
+void ADC0SS2_Handler(void);
+void timerA1Handler(void);
+void Timer2A_Handler(void);
+void Timer0A_Handler(void);
+void Timer0B_Handler(void);
 
 //*****************************************************************************
 //
@@ -102,14 +105,14 @@ void (* const g_pfnVectors[])(void) =
     IntDefaultHandler,                      // Quadrature Encoder 0
     IntDefaultHandler,                      // ADC Sequence 0
     IntDefaultHandler,                      // ADC Sequence 1
-    IntDefaultHandler,                      // ADC Sequence 2
-    ADC0SS3_Handler,                        // ADC Sequence 3
+    ADC0SS2_Handler,                        // ADC Sequence 2
+    IntDefaultHandler,                      // ADC Sequence 3
     IntDefaultHandler,                      // Watchdog timer
-    IntDefaultHandler,                         // Timer 0 subtimer A
-    IntDefaultHandler,                      // Timer 0 subtimer B
-    timerA1Handler,                      // Timer 1 subtimer A
+    Timer0A_Handler,                        // Timer 0 subtimer A
+    Timer0B_Handler,                        // Timer 0 subtimer B
+    timerA1Handler,                         // Timer 1 subtimer A
     IntDefaultHandler,                      // Timer 1 subtimer B
-    IntDefaultHandler,                      // Timer 2 subtimer A
+    Timer2A_Handler,                        // Timer 2 subtimer A
     IntDefaultHandler,                      // Timer 2 subtimer B
     IntDefaultHandler,                      // Analog Comparator 0
     IntDefaultHandler,                      // Analog Comparator 1
