@@ -103,11 +103,7 @@ int m_iDutyCycleX =  4999;       // PWM duty cycle RW2 (X axis)
 int m_iDutyCycleY =  4999;       // PWM duty cycle RW3 (Y axis)
 
 //Speed measure from encoders
-volatile unsigned int m_iCounterX = 0;   // Encoder counter (X axis)
-volatile unsigned int m_iCounterZ = 0;   // Encoder counter (Z axis)
-volatile unsigned int m_iCounterY = 0;   // Encoder counter (Y axis)
-
-uint32_t m_uiPeriodX, m_uiPeriodY, m_uiPeriodZ;        // 24-bit, 12.5 ns units
+uint32_t m_uiPeriodX, m_uiPeriodY, m_uiPeriodZ;        // 24-bit, 65.5 ns units
 uint32_t static m_uiFirstX, m_uiFirstY, m_uiFirstZ;    // Timer0A first edge
 
 //---------------------MAIN PROGRAM---------------------
@@ -418,13 +414,13 @@ void enable_PWM(void){
     SYSCTL_RCGCGPIO_R |= (1<<5);           // Enable system clock to PORTF
     while((SYSCTL_PRGPIO_R & (1<<5))==0);  // Wait until clock is initialized
 
-    SYSCTL_RCC_R |= (1<<20);            // Enable System Clock Divisor function
-    SYSCTL_RCC_R |= 0x000E0000;         // Use pre-divider value of 64
+    SYSCTL_RCC_R |= (1<<20);               // Enable System Clock Divisor function
+    SYSCTL_RCC_R |= 0x000E0000;            // Use pre-divider value of 64
 
     // PF0 has special function, need to unlock to modify
-    GPIO_PORTF_LOCK_R = GPIO_LOCK_KEY;   // Unlock commit register
-    GPIO_PORTF_CR_R = 0X1F;              // Make PORTF0 configurable
-    GPIO_PORTF_LOCK_R  = 0;              // Lock commit register
+    GPIO_PORTF_LOCK_R = GPIO_LOCK_KEY;     // Unlock commit register
+    GPIO_PORTF_CR_R = 0X1F;                // Make PORTF0 configurable
+    GPIO_PORTF_LOCK_R  = 0;                // Lock commit register
 
     // Setting of PF0, PF2 and PF3 as M1PWM5, M1PWM6, M1PWM7 channels
     GPIO_PORTF_AFSEL_R |= (1<<0)|(1<<2)|(1<<3);     // Sets an alternate function
@@ -492,9 +488,6 @@ void initTimer1Aint(void){
 
 void timerA1Handler(void){
     if(TIMER1_MIS_R & 0x01){
-        // Toggle blue led
-        //GPIO_PORTF_DATA_R ^= (1<<3);
-
         // Read MPU6050 in a burst of data
        MPU6050_getData(m_iMpuRawData);
 
@@ -506,21 +499,6 @@ void timerA1Handler(void){
     //    m_fGY = (float)m_iMpuRawData[5]/131.0;
     //    m_fGZ = (float)m_iMpuRawData[6]/131.0;
 
-       /*
-        // Read encoders to measure RPM
-        m_iCounterZ = timerA2Capture();       // Read encoder
-        TIMER2_CTL_R &= ~1;                   // Disable TIMER2A
-        TIMER2_TAV_R = 0;
-        TIMER2_TAR_R = 0;
-        m_iCounterX = timerA0Capture();       // Read encoder
-        TIMER0_CTL_R &= ~1;                   // Disable TIMER0A
-        TIMER0_TAV_R = 0;
-        TIMER0_TAR_R = 0;
-        m_iCounterY = timerB0Capture();       // Read encoder
-        TIMER0_CTL_R &= ~(1<<8);              // Disable TIMER0B
-        TIMER0_TBV_R = 0;
-        TIMER0_TBR_R = 0;
-*/
         // Perform PWM duty cycle
         if(m_iMode == 0){
           m_iDutyCycleX = 4999;
@@ -555,17 +533,11 @@ void timerA1Handler(void){
         PWM1_2_CMPA_R = m_iDutyCycleZ;
 
         //sprintf(m_cMesg, "%d, %d, %d, %d, %d, %d, %d, %d, %d \n", m_iDutyCycleZ, m_uiPeriodZ, m_iRw1Current, m_iDutyCycleY, m_uiPeriodY, m_iRw3Current, m_iDutyCycleX, m_uiPeriodX, m_iRw2Current);
-        sprintf(m_cMesg, "%d, %d, %d \n", m_iDutyCycleY, m_uiPeriodY, m_iRw3Current);
+        sprintf(m_cMesg, "%d, %d, %d \n", m_iDutyCycleX, m_uiPeriodX, m_iRw2Current);
         //sprintf(m_cMesg, "%.2f, %.2f, %.2f, %.2f, %.2f, %.2f, %d, %d, %d\n", m_fAX, m_fAY, m_fAZ, m_fGX, m_fGY, m_fGZ, m_iRw3Current, m_iDutyCycleZ, m_iCounterZ);
         //sprintf(m_cMesg, "%d, %d, %d \n", m_iDutyCycleX, m_iDutyCycleY, m_iDutyCycleZ);
         //sprintf(m_cMesg, "%d, %d, %d \n", Period, m_iDutyCycleY, m_iDutyCycleZ);
         UART5_printString(m_cMesg);
-
-        /*
-        TIMER2_CTL_R |= (1<<0);             // Enable TIMER2A
-        TIMER0_CTL_R |= (1<<0);             // Enable TIMER0A
-        TIMER0_CTL_R |= (1<<8);             // Enable TIMER0B
-        */
     }
 
     TIMER1_ICR_R = 0X01;                // TA1 Timeout flag
@@ -573,7 +545,7 @@ void timerA1Handler(void){
 
 /* void countersInit(void)
  * Description:
- * This function initialize timers as counter capture mode to read reaction
+ * This function initialize timers as counter timer capture mode to read reaction
  * wheels rates.
  * the pines and timers are distributed in the following array:
  * PF4 (TIMER2A) ---> RW1 (Z axis)
@@ -581,58 +553,6 @@ void timerA1Handler(void){
  * PB7 (TIMER0B) ---> RW3 (Y axis)
  */
 void countersInit(void){
-    /*
-    //Enable timer2A and portF
-    SYSCTL_RCGCTIMER_R |= (1<<2);           // Enable clock to Timer 2
-    while((SYSCTL_PRTIMER_R & (1<<2))==0);  // Wait until clock is initialized
-    SYSCTL_RCGCGPIO_R |= (1<<4);            // Enable clock to PORTF
-    while((SYSCTL_PRGPIO_R & (1<<4))==0);   // Wait until clock is initialized
-
-    //Enable PF4
-    GPIO_PORTF_DIR_R &= ~(1<<4);       // Make PF4 an input pin
-    GPIO_PORTF_DEN_R |= (1<<4);        // Make PF4 a digital pin
-    GPIO_PORTF_AFSEL_R |= (1<<4);      // Enable alternate function on PF4
-    GPIO_PORTF_PCTL_R &= ~0x000F0000;  // Configure PF4 as T2CCP0 pin
-    GPIO_PORTF_PCTL_R |= 0x000070000;
-
-    //Set timer as input-edge counter mode
-    TIMER2_CTL_R &= ~(1<<0);        // Disable TIMER2A in setup
-    TIMER2_CFG_R |= (1<<2);         // Configure as 16-bit timer mode
-    TIMER2_TAMR_R = 0x13;           // Up-count, edge-count, capture mode
-    TIMER2_TAMATCHR_R = 0xFFFF;     // Set the count limit
-    TIMER2_TAPMR_R = 0xFF;          // To 0xFFFFFF with prescaler
-    TIMER2_CTL_R &= ~(1<<3);        // Capture the rising edge
-    TIMER2_CTL_R &= ~(1<<2);        // Capture the rising edge
-    TIMER2_CTL_R |= 0x01;           // Enable Timer2A
-
-    //Enable timer0 and portB
-    SYSCTL_RCGCTIMER_R |= (1<<0);           // Enable clock to Timer 0
-    while((SYSCTL_PRTIMER_R & (1<<0))==0);  // Wait until clock is initialized
-    SYSCTL_RCGCGPIO_R |= (1<<1);            // Enable clock to PORTB
-    while((SYSCTL_PRGPIO_R & (1<<1))==0);   // Wait until clock is initialized
-
-    //Enable PB6 - PB7
-    GPIO_PORTB_DIR_R &= ~((1<<6) | (1<<7));   // Make PB6, PB7 an input pin
-    GPIO_PORTB_DEN_R |= (1<<6) | (1<<7);      // Make PB6, PB7 a digital pin
-    GPIO_PORTB_AFSEL_R |= (1<<6) | (1<<7);    // Enable alternate function on PB6, PB7
-    GPIO_PORTB_PCTL_R &= ~0xFF000000;         // Configure PB6 as T0CCP0
-    GPIO_PORTB_PCTL_R |= 0x77000000;
-
-    //Set timer as input-edge counter mode
-    TIMER0_CTL_R &= ~(1<<0);        // Disable TIMER0A in setup0
-    TIMER0_CTL_R &= ~(1<<8);        // Disable TIMER0B in setup
-    TIMER0_CFG_R |= (1<<2);         // Configure as 16-bit timer mode
-    TIMER0_TAMR_R = 0x13;           // Up-count, edge-count, capture mode TIMER A
-    TIMER0_TBMR_R = 0x13;           // Up-count, edge-count, capture mode TIMER B
-    TIMER0_TAMATCHR_R = 0xFFFF;     // Set the count limit TIMER A
-    TIMER0_TBMATCHR_R = 0xFFFF;     // Set the count limit TIMER B
-    TIMER0_TAPMR_R = 0xFF;          // To 0xFFFFFF with prescaler TIMER A
-    TIMER0_TBPMR_R = 0xFF;          // To 0xFFFFFF with prescaler TIMER B
-    TIMER0_CTL_R &= ~((1<<3)|(1<<2));          // Capture the rising edge TIMER A
-    TIMER0_CTL_R &= ~((1<<11)|(1<<10));        // Capture the rising edge TIMER B
-    TIMER0_CTL_R |= (1<<0);         // Enable Timer0A
-    TIMER0_CTL_R |= (1<<8);         // Enable Timer0B
-    */
 
     //Enable timer2A and Port F
     SYSCTL_RCGCTIMER_R |= (1<<2);               // Enable clock to Timer 2
@@ -676,11 +596,10 @@ void countersInit(void){
     GPIO_PORTB_PCTL_R |= 0x77000000;
 
     //Set timer as input-edge counter mode
-    TIMER0_CTL_R &= ~(1<<0);                    // Disable TIMER0A in setup
-    TIMER0_CTL_R &= ~(1<<8);                    // Disable TIMER0B in setup
+    TIMER0_CTL_R &= ~((1<<0)|(1<<8));           // Disable TIMER0A and TIMER0B in setup
     TIMER0_CFG_R |= (1<<2);                     // Configure as 16-bit timer mode
-    TIMER0_TAMR_R = 0x07;                       // Count down, edge-time, capture mode TIMER0A
-    TIMER0_TBMR_R = 0x07;                       // Count down, edge-time, capture mode TIMER0B
+    TIMER0_TAMR_R = 0x07;                       // Count up, edge-time, capture mode TIMER0A
+    TIMER0_TBMR_R = 0x07;                       // Count up, edge-time, capture mode TIMER0B
     TIMER0_CTL_R &= ~((1<<3)|(1<<2));           // Capture the rising edge TIMER0A
     TIMER0_CTL_R &= ~((1<<11)|(1<<10));         // Capture the rising edge TIMER0B
     TIMER0_TAILR_R = 0x0000FFFF;                // Start value TAMR0A
@@ -696,33 +615,21 @@ void countersInit(void){
      NVIC_EN0_R |= ((1<<19)|(1<<20));                       // Enable interrupt 23 in NVIC
 }
 
-int timerA2Capture(void){
-    return TIMER2_TAR_R;
-}
-
-int timerA0Capture(void){
-    return TIMER0_TAR_R;
-}
-
-int timerB0Capture(void){
-    return TIMER0_TBR_R;
-}
-
 void Timer2A_Handler(void){
     TIMER2_ICR_R |= (1<<2);                                   // Acknowledge timer0A capture
-    m_uiPeriodZ = (m_uiFirstZ - TIMER2_TAR_R)&0x00FFFFFF;     // 62.5ns resolution
+    m_uiPeriodZ = 53333333/((m_uiFirstZ - TIMER2_TAR_R)&0x00FFFFFF);     // 62.5ns resolution
     m_uiFirstZ = TIMER2_TAR_R;                                // Setup for next
 }
 
 void Timer0A_Handler(void){
     TIMER0_ICR_R |= (1<<2);                                   // Acknowledge timer0A capture
-    m_uiPeriodX = (m_uiFirstX - TIMER0_TAR_R)&0x00FFFFFF;     // 62.5ns resolution
-    m_uiFirstX = TIMER2_TAR_R;                                // Setup for next
+    m_uiPeriodX = 53333333/((m_uiFirstX - TIMER0_TAR_R)&0x00FFFFFF);     // 62.5ns resolution
+    m_uiFirstX = TIMER0_TAR_R;                                // Setup for next
 }
 
 void Timer0B_Handler(void){
     TIMER0_ICR_R |= (1<<10);                                   // Acknowledge timer0A capture
-    m_uiPeriodY = (m_uiFirstY - TIMER0_TBR_R)&0x00FFFFFF;      // 62.5ns resolution
+    m_uiPeriodY = 53333333/((m_uiFirstY - TIMER0_TBR_R)&0x00FFFFFF);      // 62.5ns resolution
     m_uiFirstY  = TIMER0_TBR_R;                                // setup for next
 }
 
