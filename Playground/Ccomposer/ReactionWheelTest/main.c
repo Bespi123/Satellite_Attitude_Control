@@ -708,7 +708,8 @@ void ADC0SS2_Handler(void){
         m_iRw1Current += m_iz[i]/m_iWindowSize;
     };
 
-    //Clear flag bit and Enable SS3 conversion or start sampling data
+    //Clear flag bit and Enable SS2 conversion or start sampling data
     ADC0_ISC_R = (1<<2);
     ADC0_PSSI_R |= (1<<2);
 }
+
