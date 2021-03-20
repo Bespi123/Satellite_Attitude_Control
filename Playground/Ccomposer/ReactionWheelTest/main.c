@@ -3,9 +3,8 @@
  * Autor: Brayan Espinoza (Bespi123)
  * Description:
  *
- *
  * IMPORTANT: Change stack size into 2k and compiled into c99 dialect.
- * Modify: 04/02/2021
+ * Modify: 11/03/2021
  ***********************/
 
 //--------------------------Program Libraries-------------------------
@@ -14,6 +13,10 @@
 #include <stdlib.h>
 #include <string.h>
 #include <stdio.h>
+#include <math.h>
+#include "sensorlib/quaternion.h"
+#include "sensorlib/quaternion.c"
+#include "sensorlib/vector.h"
 #include "inc/tm4c123gh6pm.h"
 
 //-------------------------Program Definitions------------------------
@@ -37,11 +40,6 @@
 #define  Reg_GYRO_YOUT_H        0x45    // GyroY data MSB
 #define  Reg_GYRO_ZOUT_H        0x47    // GyroZ data MSB
 #define  Reg_WHO_I_AM           0x75    // Read Address
-
-//----------------------RW Controller Coeficients---------------------
-uint32_t Icoeficient = 15673894481;
-float ReactioWheelInertia = 5*10^(-7);
-float dt = 0.001;
 
 /*
  *------------------PROGRAM FUNCTIONS-------------------
@@ -87,53 +85,71 @@ void SysTickInit(void);
 // Other functions
 void Delay(unsigned long counter);
 
-//----------------PROGRAM GLOBAL VARIABLES--------------
-int16_t m_iMpuRawData[7];                                   // MPU6050 raw data
-//float m_fAX, m_fAY, m_fAZ, m_ft, m_fGX, m_fGY, m_fGZ;       // MPU6050 Data
+//----------------PROGRAM GLOBAL VARIABLES--------------------
 char m_cMesg[100];                                          // Buffer to send
-int m_iMode = 0;                                            // Mode variable
+unsigned char m_cMode = 'A';                                // Mode variable
 
+//----------------------RW Controller Variables---------------------
+float Icoeficient = 15673894481;
+float ReactioWheelInertia = 5*10^(-7);
+//float dt = 0.0012;
+float dt = 0.5;
+float errorXi = 0,errorYi = 0,errorZi = 0;  // Current torque error integral
+
+//---------------CURRENT SENSORS VARIABLES---------------------
 //Filter variables (Mobile Average Filter)
 const int m_iWindowSize = 20;            // Window size
 volatile unsigned int m_ix[20];          // Buffer to store past outputs
 volatile unsigned int m_iy[20];          // Buffer to store past outputs
 volatile unsigned int m_iz[20];          // Buffer to store past outputs
-
 //Variables to store current sensors
-volatile unsigned int m_iRw1Current;                        // ADC Current
-volatile unsigned int m_iRw2Current;                        // ADC Current
-volatile unsigned int m_iRw3Current;                        // ADC Current
+volatile unsigned int m_iRw1Current;     // ADC Current
+volatile unsigned int m_iRw2Current;     // ADC Current
+volatile unsigned int m_iRw3Current;     // ADC Current
 
+//--------------REACTION WHEELS COMMAND VARIABLES--------------
 //Speed command variables
-int m_iDutyCycleZ =  4999;       // PWM duty cycle RW1 (Z axis)
-int m_iDutyCycleX =  4999;       // PWM duty cycle RW2 (X axis)
-int m_iDutyCycleY =  4999;       // PWM duty cycle RW3 (Y axis)
+uint16_t m_iDutyCycleZ =  4999;       // PWM duty cycle RW1 (Z axis)
+uint16_t m_iDutyCycleX =  4999;       // PWM duty cycle RW2 (X axis)
+uint16_t m_iDutyCycleY =  4999;       // PWM duty cycle RW3 (Y axis)
+//Direction command variables
+bool m_bDirectionZ =  false;     // RW1 Direction (Z axis)
+bool m_bDirectionX =  false;     // RW2 Direction (X axis)
+bool m_bDirectionY =  false;     // RW3 Direction (Y axis)
 
+//-------------REACTION WHEELS ENCODERS VARIABLES---------------
 //Speed measure from encoders
 uint32_t m_uiPeriodX, m_uiPeriodY, m_uiPeriodZ;        // 24-bit, 65.5 ns units
 uint32_t static m_uiFirstX, m_uiFirstY, m_uiFirstZ;    // Timer0A first edge
-
 //Torque I controller variables
 const int m_iRwWindowSize = 20;                       // Window size
 volatile unsigned int m_iRwX[20];                     // Buffer to store past outputs
 volatile unsigned int m_iRwY[20];                     // Buffer to store past outputs
 volatile unsigned int m_iRwZ[20];                     // Buffer to store past outputs
-uint32_t m_uiRwRateX,m_uiRwRateY, m_uiRwRateZ;        // Filtered reaction wheels
-uint32_t m_uiRwRateXant,m_uiRwRateYant, m_uiRwRateZant;        // Anterior Filtered reaction wheels
+float m_uiRwRateX,m_uiRwRateY, m_uiRwRateZ;        // Filtered reaction wheels
+float m_uiRwRateXant,m_uiRwRateYant, m_uiRwRateZant;        // Anterior Filtered reaction wheels
 
+//-------------MPU AND KINETICS VARIABLES-----------------------
+int16_t m_iMpuRawData[7];                             // MPU6050 raw data
+float m_fAX, m_fAY, m_fAZ, m_fGX,m_fGY,m_fGZ;         // MPU6050 data
+float m_fRoll, m_fPitch, m_fYaw;                      // Euler Angles
+float eRollI=0,ePitchI=0,eYawI=0;                           // Euler Angles integer rates
+float m_fRollAnt,m_fPitchAnt,m_fYawAnt;               // Euler Angles past samples
 
+float m_fq[4];                                        // Attitude quaternion
 //---------------------MAIN PROGRAM---------------------
 int main(void){
   I2c1_begin();             // Initialize I2C port
   Delay(1000);
   Uart5_begin();            // Initialize UART port
+  Delay(1000);
   MPU6050_Init();           // Initialize MPU6050
   Delay(1000);
   initDirectionPins();      // Initialize CW/CCW Pines
   enable_PWM();             // Enable PWM channels
   countersInit();           // Initialize timers capture mode for encoders
   initTimer1Aint();         // Initialize Timer1 interruption
-  adcInitialization();      // Initialize ADC to read currents
+  //adcInitialization();      // Initialize ADC to read currents
   SysTickInit();            // Initialize Systick interrupt
 
   while(1){
@@ -201,13 +217,17 @@ void Uart5_begin(void){
     while((SYSCTL_PRGPIO_R & 0x10)==0);
 
     // UART5 initialization
-    UART5_CTL_R &= ~0x01;                           // Disable UART5
-    UART5_IBRD_R = (UART5_IBRD_R & ~0XFFFF)+104;    // for 9600 baud rate, integer = 104
-    UART5_FBRD_R = (UART5_FBRD_R & ~0X3F)+11;       // for 9600 baud rate, fractional = 11
+    UART5_CTL_R &= ~0x01;                               // Disable UART5
+    UART5_IBRD_R = (UART5_IBRD_R & ~0XFFFF)+104;        // for 9600 baud rate, integer = 104
+    UART5_FBRD_R = (UART5_FBRD_R & ~0X3F)+11;           // for 9600 baud rate, fractional = 11
 
-    UART5_CC_R = 0x00;                              // Select system clock (based on clock source and divisor factor)*/
-    //UART5_LCRH_R = (UART5_LCRH_R & ~0XFF)| 0x70;    // Data length 8-bit, not parity bit, FIFO enable
-    UART5_LCRH_R = (UART5_LCRH_R & ~0XFF)| 0x60;    // Data length 8-bit, not parity bit, FIFO disable
+    UART5_CC_R = 0x00;                                  // Select system clock (based on clock source and divisor factor)
+    UART5_LCRH_R = (UART5_LCRH_R & ~0XFF)| 0x70;        // Data length 8-bit, not parity bit, FIFO enable
+    //UART5_LCRH_R = (UART5_LCRH_R & ~0XFF)| 0x60;      // Data length 8-bit, not parity bit, FIFO disable
+    UART5_IFLS_R &= ~0x3F;                              // TX FIFO <= 1/2 empty, RX FIFO >= 1/2 full
+    UART5_IFLS_R += (UART_IFLS_TX4_8|UART_IFLS_RX4_8);  // and RX time-out
+    //UART5_IM_R |= (UART_IM_RXIM|UART_IM_TXIM|UART_IM_RTIM);
+
     UART5_CTL_R &= ~0X20;                           // HSE = 0
     UART5_CTL_R |= 0X301;                           // UARTEN = 1, RXE = 1, TXE =1
 
@@ -222,12 +242,11 @@ void Uart5_begin(void){
     UART5_ICR_R &= ~(0x0780);            // Clear receive interrupt
     UART5_IM_R  = 0x0010;                // Enable UART5 Receive interrupt
     NVIC_EN1_R  |= (1<<29);               // Enable IRQ61 for UART5
-    //NVIC->ISER[1] |= 0x20000000;
 }
 
 /* void UART5_Transmitter(unsigned char data)
  * Description:
- * This function sends a char througth UART5.
+ * This function sends a char throught UART5.
  */
 void UART5_Transmitter(unsigned char data){
     while((UART5_FR_R & (1<<5)) != 0);      // Wait until Tx buffer is not full
@@ -244,30 +263,64 @@ void UART5_printString(char *str){
     }
 }
 
+/*
+// copy from hardware RX FIFO to software RX FIFO
+// stop when hardware RX FIFO is empty or software RX FIFO is full
+void static copyHardwareToSoftware(void){
+    char letter;
+    while(((UART0_FR_R&UART_FR_RXFE)==0)&&(RxFifo_Size() < (FIFOSIZE-1))){
+        letter = UART0_DR_R;
+        RxFifo_Put(letter);
+    }
+}
+*/
+
 /* void UART5_Handler(void){
  * Description:
  * This function manage the UART5 interruption.
  */
 void UART5_Handler(void){
     //Local variables
-    unsigned char rx_data = 0;
-    UART5_ICR_R &= ~(0x010);            // Clear receive interrupt
-    rx_data = UART5_DR_R ;              // Get the received data byte
-    if(rx_data == 'A'){
-        GPIO_PORTA_DATA_R |= (1<<4);
-    }else if(rx_data == 'B'){
-        GPIO_PORTA_DATA_R &= ~(1<<4);
-    }else if(rx_data == '0'){           // Step OFF
-        m_iMode = 0;
-    }else if(rx_data == '1'){           // Step ON
-        m_iMode = 1;
-    }else if(rx_data == '2'){           // Ramp (torque step)
-        m_iMode = 2;
-    }else if(rx_data == '3'){           // Ramp (torque step)
-        m_iMode = 3;
+    unsigned char rx_data[10];       // Incoming buffer data
+
+    UART5_ICR_R &= ~(0x010);         // Clear receive interrupt
+
+    //Read UART5 buffer
+    for(char i=0; i<16; i++){
+        rx_data[i] = UART5_DR_R;
     }
 
-    //UART5_Transmitter(rx_data); // send data that is received
+     // Get reaction wheel mode
+    if((rx_data[0])== 224){
+        //Change to manual mode
+        m_cMode = 'M';
+        //RW1, RW2, RM3 directions
+        if(rx_data[3]==16)
+            m_bDirectionX = true;
+        else
+            m_bDirectionX = false;
+        if(rx_data[6]==16)
+            m_bDirectionY = true;
+        else
+            m_bDirectionY = false;
+        if(rx_data[9]==16)
+            m_bDirectionZ = true;
+        else
+            m_bDirectionZ = false;
+
+        // RW1, RW2, RW3 duty cycles
+        m_iDutyCycleZ = ((uint16_t)rx_data[7] << 8) | rx_data[8];
+        m_iDutyCycleX = ((uint16_t)rx_data[1] << 8) | rx_data[2];
+        m_iDutyCycleY = ((uint16_t)rx_data[4] << 8) | rx_data[5];
+
+    }else if((rx_data[0])== 239){
+        //Change to automatic Mode
+        m_cMode = 'A';
+        // Turn off motors
+        //m_iDutyCycleZ =  0;
+        //m_iDutyCycleX =  0;
+        //m_iDutyCycleY =  0;
+    }
 }
 
 /* void I2c1_begin(void)
@@ -493,8 +546,8 @@ void initTimer1Aint(void){
     TIMER1_TAMR_R = 0x02;          // Select periodic down counter mode of timer1
     TIMER1_TAPR_R = 250-1;         // TimerA prescaler value 250 (64KHz)
     //TIMER1_TAILR_R = 32-1 ;     // TimerA counter starting count down value from 1ms
-    TIMER1_TAILR_R = 12800-1 ;     // TimerA counter starting count down value from 200ms
-    //TIMER1_TAILR_R = 64000-1 ;     // TimerA counter starting count down value from 1s
+    //TIMER1_TAILR_R = 12800-1 ;     // TimerA counter starting count down value from 200ms
+    TIMER1_TAILR_R = 64000-1 ;     // TimerA counter starting count down value from 1s
     TIMER1_ICR_R = 0x1;            // TimerA timeout flag bit clears
 
     // Enable timer 1 interrupt
@@ -505,15 +558,8 @@ void initTimer1Aint(void){
 
 void timerA1Handler(void){
     if(TIMER1_MIS_R & 0x01){
-        // Read MPU6050 in a burst of data
-       //MPU6050_getData(m_iMpuRawData);
-
-        //sprintf(m_cMesg, "%d, %d, %d, %d, %d, %d, %d, %d, %d \n", m_iDutyCycleZ, m_uiPeriodZ, m_iRw1Current, m_iDutyCycleY, m_uiPeriodY, m_iRw3Current, m_iDutyCycleX, m_uiPeriodX, m_iRw2Current);
-        //sprintf(m_cMesg, "%d, %d, %d \n", m_iDutyCycleX, m_uiPeriodX, m_iRw2Current);
-        //sprintf(m_cMesg, "%.2f, %.2f, %.2f, %.2f, %.2f, %.2f, %d, %d, %d\n", m_fAX, m_fAY, m_fAZ, m_fGX, m_fGY, m_fGZ, m_iRw3Current, m_iDutyCycleZ, m_iCounterZ);
-        //sprintf(m_cMesg, "%d, %d, %d \n", m_iDutyCycleX, m_iDutyCycleY, m_iDutyCycleZ);
-        //sprintf(m_cMesg, "%d, %d, %d \n", Period, m_iDutyCycleY, m_iDutyCycleZ);
-        //UART5_printString(m_cMesg);
+        sprintf(m_cMesg, "%.2f, %.2f, %.2f \n", m_fRoll, m_fPitch, m_fYaw);
+        UART5_printString(m_cMesg);
     }
 
     TIMER1_ICR_R = 0X01;                // TA1 Timeout flag
@@ -684,80 +730,34 @@ void ADC0SS2_Handler(void){
         m_iRw1Current += m_iz[i]/m_iWindowSize;
     }
 
-    //Clear flag bit and Enable SS3 conversion or start sampling data
+    //Clear flag bit and Enable SS2 conversion or start sampling data
     ADC0_ISC_R = (1<<2);
     ADC0_PSSI_R |= (1<<2);
 }
 
 void SysTickInit(void){
-    //NVIC_ST_RELOAD_R = 15999999;   // One second delay 1ms relaod value
-    NVIC_ST_RELOAD_R = 19999;   // One second delay 1ms relaod value
+   // NVIC_ST_RELOAD_R = 15999999;   // One second delay 1s relaod value
+    NVIC_ST_RELOAD_R = 7999999;   // One second delay 0.5s relaod value
+    //NVIC_ST_RELOAD_R = 19999;   // One second delay 1ms relaod value
     NVIC_ST_CTRL_R = 0x07;      // Enable counter, interrupt and select system bus clock
     NVIC_ST_CURRENT_R = 0;      // Initialize current value register
 }
 
 void SysTick_Handler(void){
-    /*
-    if(m_iMode == 0){
-      m_iDutyCycleX = 4999;
-      m_iDutyCycleY = 0;
-      m_iDutyCycleZ = 0;
-    } else if (m_iMode == 1){
-        m_iDutyCycleX = 0;
-        m_iDutyCycleY =4999;
-        m_iDutyCycleZ = 0;
-    } else if (m_iMode == 2){
-        m_iDutyCycleX = 0;
-        m_iDutyCycleY = 0;
-        //m_iDutyCycleZ = 0;
-        m_iDutyCycleZ = 4999;
-    } else if (m_iMode == 3){
-       m_iDutyCycleX = m_iDutyCycleX - 10;
-       m_iDutyCycleY = m_iDutyCycleY - 10;
-       // m_iDutyCycleX = 0;
-       // m_iDutyCycleY = 0;
-        m_iDutyCycleZ = m_iDutyCycleZ - 10;
-       if (m_iDutyCycleX <= 0)
-           m_iDutyCycleX = 5000;
-       else if (m_iDutyCycleY <= 0)
-           m_iDutyCycleY = 5000;
-       else if (m_iDutyCycleZ <= 0)
-           m_iDutyCycleZ = 5000;
-    }
-*/
-    // Local variables
-        int rwAccX;
-        int rwAccY;
-        int rwAccZ;
-        int roll,pitch,yaw;
+    // LOCAL VARIABLES
+    // Torque controller
+    float rwAccX, rwAccY, rwAccZ;    // Reaction wheels acceleration
+    float Tx,Ty,Tz;                  // Current calculated torque
+    float errorX, errorY,errorZ;     // Current torque error
+    int rawX,rawY,rawZ;              // Raw PWM commands
+    // PID controller
+    float eRoll,ePitch,eYaw;         // Euler Angle errors
+    float eRollD,ePitchD,eYawD;      // Euler angle error rates
 
-    // Get CubeSat IMU values
-        MPU6050_getData(m_iMpuRawData);
+    // Quaternion feedback controller
+    float Tcx,Tcy,Tcz;              // Calculated torque command
 
-        // Convert The Readings
-        AX = (float)m_iMpuRawData[0]/16384.0;
-        AY = (float)m_iMpuRawData[1]/16384.0;
-        AZ = (float)m_iMpuRawData[2]/16384.0;
-        GX = (float)m_iMpuRawData[4]/131.0;
-        GY = (float)m_iMpuRawData[5]/131.0;
-        GZ = (float)m_iMpuRawData[6]/131.0;
-        //t = ((float)MPURawData[3]/340.00)+36.53;
-
-        //Get Euler angles
-        roll = atan(AY / sqrt(pow(AX, 2) + pow(AZ, 2))) * (180.0 / 3.14);
-        pitch = atan(AX / sqrt(pow(AY, 2) + pow(AZ, 2))) * (180.0 / 3.14);
-        yaw = yaw + (GZ * dt) / 1000;
-
-    // Get Torque command
-        rollError = 0-roll;
-        pitchError = 0-pitch;
-        yawError = 0-yaw;
-    // Perform PID controller
-        Tcx=-0.0601250836449178*rollError-0.113131194659226*;
-        Tcy=;
-        Tcz=;
-
-    // Mobile average filter and calculate current torque
+    // REACTION WHEELS RATES - MOBILE AVERAGE FILTER
     // Update past samples buffer
     for(int i = m_iRwWindowSize-2; i >= 0; i--){
         // Shift data
@@ -773,52 +773,129 @@ void SysTick_Handler(void){
     m_uiRwRateY = 0;
     m_uiRwRateZ = 0;
 
-    //Perform the mobile average
+    // Perform the mobile average
     for(int i = 0; i < m_iRwWindowSize; i++){
-        m_uiRwRateX += m_iRwX[i]/m_iRwWindowSize;
-        m_uiRwRateY += m_iRwY[i]/m_iRwWindowSize;
-        m_uiRwRateZ += m_iRwZ[i]/m_iRwWindowSize;
+        m_uiRwRateX += (m_iRwX[i]/m_iRwWindowSize)*2*3.14/60;
+        m_uiRwRateY += (m_iRwY[i]/m_iRwWindowSize)*2*3.14/60;
+        m_uiRwRateZ += (m_iRwZ[i]/m_iRwWindowSize)*2*3.14/60;
     }
 
-    //Calculate torque
-    // Get acceleration
+    // GET MPU6050 DATA and quaternions
+    MPU6050_getData(m_iMpuRawData);
+    // Convert Readings
+    m_fAX = (float)m_iMpuRawData[0]/16384.0;
+    m_fAY = (float)m_iMpuRawData[1]/16384.0;
+    m_fAZ = (float)m_iMpuRawData[2]/16384.0;
+    m_fGX = (float)m_iMpuRawData[4]/131.1;
+    m_fGY = (float)m_iMpuRawData[5]/131.1;
+    m_fGZ = (float)m_iMpuRawData[6]/131.1;
+    //t = ((float)MPURawData[3]/340.00)+36.53;
+
+    //Get Euler angles (grados)
+    /*
+    m_fRoll = atan(m_fAY  / sqrt(pow(m_fAX, 2) + pow(m_fAZ, 2))) * (180.0 / 3.14);
+    m_fPitch = atan(m_fAX / sqrt(pow(m_fAY, 2) + pow(m_fAZ, 2))) * (180.0 / 3.14);
+    m_fYaw += m_fGZ * dt;
+    */
+
+    //Get Euler angles (rad)
+    m_fRoll = atan(m_fAY  / sqrt(pow(m_fAX, 2) + pow(m_fAZ, 2)));
+    m_fPitch = atan(m_fAX / sqrt(pow(m_fAY, 2) + pow(m_fAZ, 2)));
+    m_fYaw += m_fGZ *(3.14/180)* dt;
+
+    //Get quaternions
+    //QuaternionFromEuler(m_fq, m_fRoll ,m_fPitch ,m_fYaw);
+
+    // PERFORM CONTROL LAW
+    // AUTOMATIC MODE
+    if(m_cMode == 'A'){
+        // PID CONTROLLER
+        // Euler angle error
+        eRoll = 0 - m_fRoll;
+        ePitch = 0 - m_fPitch;
+        eYaw = 0 - m_fYaw;
+        // Integrate Error
+        eRollI += eRoll*dt;
+        ePitchI += ePitch*dt;
+        eYawI += eYaw*dt;
+        // Error rate
+        eRollD = (m_fRoll-m_fRollAnt)/dt;
+        ePitchD = (m_fPitch-m_fPitchAnt)/dt;
+        eYawD = (m_fYaw-m_fYawAnt)/dt;
+        // Perform PID controller
+        Tcx=-0.0601250836449178*eRoll-0.113131194659226*eRollI-0.005934861149*eRollD;
+        Tcy=-0.0601250836449178*ePitch-0.113131194659226*ePitchI-0.005934861149*ePitchD;
+        Tcz=-0.0601250836449178*eYaw-0.113131194659226*eYawI-0.005934861149*eYawD;
+
+        // TORQUE CONTROLLER
+        // Calculate torque
+        // Get acceleration
         rwAccX = ((m_uiRwRateX-m_uiRwRateXant)/dt);
         rwAccY = ((m_uiRwRateY-m_uiRwRateYant)/dt);
         rwAccZ = ((m_uiRwRateZ-m_uiRwRateZant)/dt);
-    // Get torque
+        // Get current torque
         Tx = ReactioWheelInertia*rwAccX;
         Ty = ReactioWheelInertia*rwAccY;
         Tz = ReactioWheelInertia*rwAccZ;
+        //Get Torque error
+        errorX = Tcx-Tx;
+        errorY = Tcy-Ty;
+        errorZ = Tcz-Tz;
+        //Integrate torque error
+        errorXi += errorX*dt;
+        errorYi += errorY*dt;
+        errorZi += errorZ*dt;
+        //Calculate speed command
+        rawX = Icoeficient*errorXi;
+        rawY = Icoeficient*errorYi;
+        rawZ = Icoeficient*errorZi;
+        m_iDutyCycleX = abs(rawX);
+        m_iDutyCycleY = abs(rawY);
+        m_iDutyCycleZ = abs(rawZ);
+        //Check for negative torques
+        if (rawX>0)
+            m_bDirectionX = true;
+        else
+            m_bDirectionX = false;
+        if (rawY>0)
+            m_bDirectionY = true;
+        else
+            m_bDirectionY = false;
+        if (rawZ>0)
+            m_bDirectionZ = false;
+        else
+            m_bDirectionZ = true;
 
-    //Get Torque error
-    errorX = Tcx-Tx;
-    errorY = Tcy-Ty;
-    errorZ = Tcz-Tz;
-
-    //Integrate error
-    errorXi = 0;
-    errorYi = 0;
-    errorZi = 0;
-
-    //Calculate speed command
-    m_iDutyCycleX = Icoeficient*errorXi;
-    m_iDutyCycleY = Icoeficient*errorYi;
-    m_iDutyCycleZ = Icoeficient*errorZi;
-
+        //Update values
+        m_uiRwRateXant = m_uiRwRateX;
+        m_uiRwRateYant = m_uiRwRateY;
+        m_uiRwRateZant = m_uiRwRateZ;
+        m_fRollAnt = m_fRoll;
+        m_fPitchAnt = m_fPitch;
+        m_fYawAnt = m_fYaw;
+    }
+    // Saturate outputs
+    if(m_iDutyCycleX>4999)
+        m_iDutyCycleX = 4999;
+    if(m_iDutyCycleY>4999)
+        m_iDutyCycleY = 4999;
+    if(m_iDutyCycleZ>4999)
+        m_iDutyCycleZ = 4999;
     // Send Speed Command
     PWM1_3_CMPA_R = m_iDutyCycleX;
     PWM1_3_CMPB_R = m_iDutyCycleY;
     PWM1_2_CMPA_R = m_iDutyCycleZ;
-
-    //sprintf(m_cMesg, "%d, %d, %d, %d, %d, %d, %d, %d, %d \n", m_iDutyCycleZ, m_uiPeriodZ, m_iRw1Current, m_iDutyCycleY, m_uiPeriodY, m_iRw3Current, m_iDutyCycleX, m_uiPeriodX, m_iRw2Current);
-    sprintf(m_cMesg, "%d, %d, %d \n", m_iDutyCycleX, m_uiPeriodX, m_iRw2Current);
-    //sprintf(m_cMesg, "%.2f, %.2f, %.2f, %.2f, %.2f, %.2f, %d, %d, %d\n", m_fAX, m_fAY, m_fAZ, m_fGX, m_fGY, m_fGZ, m_iRw3Current, m_iDutyCycleZ, m_iCounterZ);
-    //sprintf(m_cMesg, "%d, %d, %d \n", m_iDutyCycleX, m_iDutyCycleY, m_iDutyCycleZ);
-    //sprintf(m_cMesg, "%d, %d, %d \n", Period, m_iDutyCycleY, m_iDutyCycleZ);
-    UART5_printString(m_cMesg);
-
-    //Update values
-    m_uiRwRateXant = m_uiRwRateX;
-    m_uiRwRateYant = m_uiRwRateY;
-    m_uiRwRateZant = m_uiRwRateZ;
+    // Send Direction pin
+    if (m_bDirectionX)
+        GPIO_PORTA_DATA_R |= (1<<5);
+    else
+        GPIO_PORTA_DATA_R &= ~(1<<5);
+    if (m_bDirectionY)
+        GPIO_PORTA_DATA_R |= (1<<3);
+    else
+        GPIO_PORTA_DATA_R &= ~(1<<3);
+    if (m_bDirectionZ)
+        GPIO_PORTA_DATA_R |= (1<<4);
+    else
+        GPIO_PORTA_DATA_R &= ~(1<<4);
 }

@@ -8,7 +8,7 @@
 <stringAttribute key="com.ti.ccstudio.debug.debugModel.ATTR_PROJECT.TivaC.ccxml.Stellaris In-Circuit Debug Interface_0/CORTEX_M4_0" value="ReactionWheelTest"/>
 <stringAttribute key="com.ti.ccstudio.debug.debugModel.ATTR_TARGET_CONFIG" value="${target_config_active_default:ReactionWheelTest}"/>
 <stringAttribute key="com.ti.ccstudio.debug.debugModel.MRU_PROGRAM.Tiva TM4C123GH6PM.ccxml.Stellaris In-Circuit Debug Interface/CORTEX_M4_0" value="C:\Users\b_ant\OneDrive\Documents\GitHub\MRAC_attitudecontrol\Playground\Ccomposer\ReactionWheelTest\Debug\ReactionWheelTest.out"/>
-<stringAttribute key="com.ti.ccstudio.debug.debugModel.MRU_PROGRAM.TivaC.ccxml.Stellaris In-Circuit Debug Interface_0/CORTEX_M4_0" value="C:\Users\DELL\Documents\GitHub\MRAC_attitudecontrol\Playground\Ccomposer\ReactionWheelTest\Debug\ReactionWheelTest.out"/>
+<stringAttribute key="com.ti.ccstudio.debug.debugModel.MRU_PROGRAM.TivaC.ccxml.Stellaris In-Circuit Debug Interface_0/CORTEX_M4_0" value="C:\Users\b_ant\OneDrive\Documents\GitHub\MRAC_attitudecontrol\Playground\Ccomposer\ReactionWheelTest\Debug\ReactionWheelTest.out"/>
 <listAttribute key="org.eclipse.debug.core.MAPPED_RESOURCE_PATHS">
 <listEntry value="/ReactionWheelTest"/>
 </listAttribute>
