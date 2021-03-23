@@ -41,6 +41,7 @@
 #define  Reg_GYRO_ZOUT_H        0x47    // GyroZ data MSB
 #define  Reg_WHO_I_AM           0x75    // Read Address
 
+#define PI  3.141592        // Pi definition
 /*
  *------------------PROGRAM FUNCTIONS-------------------
  */
@@ -91,9 +92,11 @@ unsigned char m_cMode = 'A';                                // Mode variable
 
 //----------------------RW Controller Variables---------------------
 float Icoeficient = 15673894481;
-float ReactioWheelInertia = 5*10^(-7);
-//float dt = 0.0012;
-float dt = 0.5;
+//#define ReactioWheelInertia 0.0000005
+#define ReactioWheelInertia 0.00002
+//float ReactioWheelInertia = 1;
+float dt = 0.0012;
+//float dt = 1;
 float errorXi = 0,errorYi = 0,errorZi = 0;  // Current torque error integral
 
 //---------------CURRENT SENSORS VARIABLES---------------------
@@ -150,8 +153,7 @@ int main(void){
   countersInit();           // Initialize timers capture mode for encoders
   initTimer1Aint();         // Initialize Timer1 interruption
   //adcInitialization();      // Initialize ADC to read currents
-  SysTickInit();            // Initialize Systick interrupt
-
+  //SysTickInit();            // Initialize Systick interrupt
   while(1){
       //Do something
   }
@@ -239,9 +241,10 @@ void Uart5_begin(void){
     GPIO_PORTE_PCTL_R = 0x00110000;      // Configure PE4 and PE5 for UART.
 
     // Enable UART5 interrupt
-    UART5_ICR_R &= ~(0x0780);            // Clear receive interrupt
-    UART5_IM_R  = 0x0010;                // Enable UART5 Receive interrupt
-    NVIC_EN1_R  |= (1<<29);               // Enable IRQ61 for UART5
+    UART5_ICR_R &= ~(0x0780);                                          // Clear receive interrupt
+    UART5_IM_R  = 0x0010;                                              // Enable UART5 Receive interrupt
+    NVIC_PRI15_R = (NVIC_PRI15_R&0x00FFFFFF)|(0x07<<13);               //Timer0A=priority 1
+    NVIC_EN1_R  |= (1<<29);                                            // Enable IRQ61 for UART5
 }
 
 /* void UART5_Transmitter(unsigned char data)
@@ -544,21 +547,49 @@ void initTimer1Aint(void){
     TIMER1_CTL_R = 0;              // Disable timer1 output
     TIMER1_CFG_R = 0x4;            // Select 16-bit configuration option
     TIMER1_TAMR_R = 0x02;          // Select periodic down counter mode of timer1
-    TIMER1_TAPR_R = 250-1;         // TimerA prescaler value 250 (64KHz)
+    //TIMER1_TAPR_R = 250-1;         // TimerA prescaler value 250 (64KHz)
     //TIMER1_TAILR_R = 32-1 ;     // TimerA counter starting count down value from 1ms
-    //TIMER1_TAILR_R = 12800-1 ;     // TimerA counter starting count down value from 200ms
-    TIMER1_TAILR_R = 64000-1 ;     // TimerA counter starting count down value from 1s
+    TIMER1_TAILR_R = 16000-1 ;     // TimerA counter starting count down value from 200ms
+    //TIMER1_TAILR_R = 64000-1 ;     // TimerA counter starting count down value from 1s
     TIMER1_ICR_R = 0x1;            // TimerA timeout flag bit clears
 
     // Enable timer 1 interrupt
     TIMER1_IMR_R |=(1<<0);         // Enables TimerA time-out  interrupt mask
     TIMER1_CTL_R |= 0x01;          // Enable TimerA module
+    NVIC_PRI4_R |= (NVIC_PRI4_R&0x00FFFFFF)|(0x04<<13);      //Timer1A=priority 4
     NVIC_EN0_R |= (1<<21);         // Enable IRQ21
 }
 
 void timerA1Handler(void){
     if(TIMER1_MIS_R & 0x01){
-        sprintf(m_cMesg, "%.2f, %.2f, %.2f \n", m_fRoll, m_fPitch, m_fYaw);
+        PWM1_3_CMPA_R = m_iDutyCycleX;
+        PWM1_3_CMPB_R = m_iDutyCycleY;
+        PWM1_2_CMPA_R = m_iDutyCycleZ;
+/*
+        // REACTION WHEELS RATES - MOBILE AVERAGE FILTER
+            // Update past samples buffer
+            for(int i = m_iRwWindowSize-2; i >= 0; i--){
+                // Shift data
+                m_iRwX[i+1]=m_iRwX[i];
+                m_iRwY[i+1]=m_iRwY[i];
+                m_iRwZ[i+1]=m_iRwZ[i];
+            }
+            // Get new sample and restart m_iRwnCurrent variables
+            m_iRwX[0]=m_uiPeriodX;
+            m_iRwY[0]=m_uiPeriodY;
+            m_iRwZ[0]=m_uiPeriodZ;
+            m_uiRwRateX = 0;
+            m_uiRwRateY = 0;
+            m_uiRwRateZ = 0;
+
+            // Perform the mobile average
+            for(int i = 0; i < m_iRwWindowSize; i++){
+                m_uiRwRateX += m_iRwX[i]/m_iRwWindowSize;
+                m_uiRwRateY += m_iRwY[i]/m_iRwWindowSize;
+                m_uiRwRateZ += m_iRwZ[i]/m_iRwWindowSize;
+            }
+            */
+        sprintf(m_cMesg, "%d, %d, %d \n", m_uiPeriodX, m_uiPeriodY, m_uiPeriodZ);
         UART5_printString(m_cMesg);
     }
 
@@ -601,8 +632,8 @@ void countersInit(void){
     TIMER2_CTL_R |= 0x00000001;                 // Enable Timer2A 24-b, +edge, interrupts
 
     //Enable interrupt
-    NVIC_PRI5_R = (NVIC_PRI5_R&0x00FFFFFF)|0x40000000;      // Timer2A=priority 2
-    NVIC_EN0_R |= 1<<23;                                    // Enable interrupt 23 in NVIC
+    //NVIC_PRI5_R = (NVIC_PRI5_R&0x00FFFFFF)|0x40000000;      // Timer2A=priority 2
+    //NVIC_EN0_R |= 1<<23;                                    // Enable interrupt 23 in NVIC
 
     //Enable Timer0 and portB
     SYSCTL_RCGCTIMER_R |= (1<<0);               // Enable clock to Timer 0
@@ -632,9 +663,11 @@ void countersInit(void){
     TIMER0_ICR_R = ((1<<2)|(1<<10));            // Clear TIMER0A and TIMER0B capture match flag
     TIMER0_CTL_R |= ((1<<0)|(1<<8));            // Enable Timer2A 24-b, +edge, interrupts
 
-    //Enable interrupt
-     //NVIC_PRI5_R = (NVIC_PRI5_R&0x00FFFFFF)|0x40000000;     //Timer2A=priority 2
-     NVIC_EN0_R |= ((1<<19)|(1<<20));                       // Enable interrupt 23 in NVIC
+    //Enable interrupts
+    NVIC_PRI4_R |= (NVIC_PRI4_R&0x00FFFFFF)|(0x01<<29);               //Timer0A=priority 1
+    NVIC_PRI5_R |= (NVIC_PRI5_R&0x00FFFFFF)|(0x02<<5)|(0x03<<29);     //Timer0B=priority 2 and Timer2A=priority 3
+    NVIC_EN0_R |= ((1<<19)|(1<<20));                                 // Enable interrupt 19 and 20 in NVIC
+    NVIC_EN0_R |= 1<<23;                                             // Enable interrupt 23 in NVIC
 }
 
 void Timer2A_Handler(void){
@@ -736,9 +769,9 @@ void ADC0SS2_Handler(void){
 }
 
 void SysTickInit(void){
-   // NVIC_ST_RELOAD_R = 15999999;   // One second delay 1s relaod value
-    NVIC_ST_RELOAD_R = 7999999;   // One second delay 0.5s relaod value
-    //NVIC_ST_RELOAD_R = 19999;   // One second delay 1ms relaod value
+    //NVIC_ST_RELOAD_R = 15999999;   // One second delay 1s relaod value
+    //NVIC_ST_RELOAD_R = 7999999;   // One second delay 0.5s relaod value
+    NVIC_ST_RELOAD_R = 19999;   // One second delay 1ms relaod value
     NVIC_ST_CTRL_R = 0x07;      // Enable counter, interrupt and select system bus clock
     NVIC_ST_CURRENT_R = 0;      // Initialize current value register
 }
@@ -775,10 +808,15 @@ void SysTick_Handler(void){
 
     // Perform the mobile average
     for(int i = 0; i < m_iRwWindowSize; i++){
-        m_uiRwRateX += (m_iRwX[i]/m_iRwWindowSize)*2*3.14/60;
-        m_uiRwRateY += (m_iRwY[i]/m_iRwWindowSize)*2*3.14/60;
-        m_uiRwRateZ += (m_iRwZ[i]/m_iRwWindowSize)*2*3.14/60;
+        m_uiRwRateX += m_iRwX[i]/m_iRwWindowSize;
+        m_uiRwRateY += m_iRwY[i]/m_iRwWindowSize;
+        m_uiRwRateZ += m_iRwZ[i]/m_iRwWindowSize;
     }
+
+    //Turn RPM into rad/s
+    m_uiRwRateX=m_uiRwRateX*2*PI/60;
+    m_uiRwRateY=m_uiRwRateY*2*PI/60;
+    m_uiRwRateZ=m_uiRwRateZ*2*PI/60;
 
     // GET MPU6050 DATA and quaternions
     MPU6050_getData(m_iMpuRawData);
