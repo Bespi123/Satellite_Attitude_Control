@@ -144,16 +144,20 @@ float m_fq[4];                                        // Attitude quaternion
 int main(void){
   I2c1_begin();             // Initialize I2C port
   Delay(1000);
-  Uart5_begin();            // Initialize UART port
+  //Uart5_begin();            // Initialize UART port
   Delay(1000);
   MPU6050_Init();           // Initialize MPU6050
   Delay(1000);
   initDirectionPins();      // Initialize CW/CCW Pines
   enable_PWM();             // Enable PWM channels
   countersInit();           // Initialize timers capture mode for encoders
-  initTimer1Aint();         // Initialize Timer1 interruption
+  //initTimer1Aint();         // Initialize Timer1 interruption
   //adcInitialization();      // Initialize ADC to read currents
   //SysTickInit();            // Initialize Systick interrupt
+
+  PWM1_3_CMPA_R = m_iDutyCycleX;
+  PWM1_3_CMPB_R = m_iDutyCycleY;
+  PWM1_2_CMPA_R = m_iDutyCycleZ;
   while(1){
       //Do something
   }
@@ -562,18 +566,16 @@ void initTimer1Aint(void){
 
 void timerA1Handler(void){
     if(TIMER1_MIS_R & 0x01){
-        PWM1_3_CMPA_R = m_iDutyCycleX;
-        PWM1_3_CMPB_R = m_iDutyCycleY;
-        PWM1_2_CMPA_R = m_iDutyCycleZ;
-/*
+
         // REACTION WHEELS RATES - MOBILE AVERAGE FILTER
-            // Update past samples buffer
-            for(int i = m_iRwWindowSize-2; i >= 0; i--){
-                // Shift data
-                m_iRwX[i+1]=m_iRwX[i];
-                m_iRwY[i+1]=m_iRwY[i];
-                m_iRwZ[i+1]=m_iRwZ[i];
-            }
+        // Update past samples buffer
+        for(int i = m_iRwWindowSize-2; i >= 0; i--){
+            // Shift data
+            m_iRwX[i+1]=m_iRwX[i];
+            m_iRwY[i+1]=m_iRwY[i];
+            m_iRwZ[i+1]=m_iRwZ[i];
+        }
+
             // Get new sample and restart m_iRwnCurrent variables
             m_iRwX[0]=m_uiPeriodX;
             m_iRwY[0]=m_uiPeriodY;
@@ -581,7 +583,7 @@ void timerA1Handler(void){
             m_uiRwRateX = 0;
             m_uiRwRateY = 0;
             m_uiRwRateZ = 0;
-
+/*
             // Perform the mobile average
             for(int i = 0; i < m_iRwWindowSize; i++){
                 m_uiRwRateX += m_iRwX[i]/m_iRwWindowSize;
@@ -680,6 +682,20 @@ void Timer0A_Handler(void){
     TIMER0_ICR_R |= (1<<2);                                   // Acknowledge timer0A capture
     m_uiPeriodX = 53333333/((m_uiFirstX - TIMER0_TAR_R)&0x00FFFFFF);     // 62.5ns resolution
     m_uiFirstX = TIMER0_TAR_R;                                // Setup for next
+
+    // REACTION WHEELS RATES - MOBILE AVERAGE FILTER
+           // Update past samples buffer
+           for(int i = m_iRwWindowSize-2; i >= 0; i--){
+               // Shift data
+               m_iRwX[i+1]=m_iRwX[i];
+               m_iRwY[i+1]=m_iRwY[i];
+               m_iRwZ[i+1]=m_iRwZ[i];
+           }
+
+               // Get new sample and restart m_iRwnCurrent variables
+               m_iRwX[0]=m_uiPeriodX;
+               m_iRwY[0]=m_uiPeriodY;
+               m_iRwZ[0]=m_uiPeriodZ;
 }
 
 void Timer0B_Handler(void){
