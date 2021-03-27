@@ -66,9 +66,8 @@ void MPU6050_getData(int16_t *MPURawData);
 
 // Counter Timer Functions
 void countersInit(void);
-int timerA2Capture(void);
-int timerA0Capture(void);
-int timerB0Capture(void);
+void EnableCountersInt(void);
+void DisableCountersInt(void);
 
 // Timer interruption
 void initTimer1Aint(void);
@@ -124,13 +123,15 @@ bool m_bDirectionY =  false;     // RW3 Direction (Y axis)
 //Speed measure from encoders
 uint32_t m_uiPeriodX, m_uiPeriodY, m_uiPeriodZ;        // 24-bit, 65.5 ns units
 uint32_t static m_uiFirstX, m_uiFirstY, m_uiFirstZ;    // Timer0A first edge
+volatile unsigned char m_cCounter=0;                   // Counter to control encoder flow
+
 //Torque I controller variables
 const int m_iRwWindowSize = 20;                       // Window size
 volatile unsigned int m_iRwX[20];                     // Buffer to store past outputs
 volatile unsigned int m_iRwY[20];                     // Buffer to store past outputs
 volatile unsigned int m_iRwZ[20];                     // Buffer to store past outputs
-float m_uiRwRateX,m_uiRwRateY, m_uiRwRateZ;        // Filtered reaction wheels
-float m_uiRwRateXant,m_uiRwRateYant, m_uiRwRateZant;        // Anterior Filtered reaction wheels
+unsigned int m_uiRwRateX,m_uiRwRateY, m_uiRwRateZ;        // Filtered reaction wheels
+float m_uiRwRateXant,m_uiRwRateYant, m_uiRwRateZant;      // Anterior Filtered reaction wheels
 
 //-------------MPU AND KINETICS VARIABLES-----------------------
 int16_t m_iMpuRawData[7];                             // MPU6050 raw data
@@ -151,15 +152,31 @@ int main(void){
   initDirectionPins();      // Initialize CW/CCW Pines
   enable_PWM();             // Enable PWM channels
   countersInit();           // Initialize timers capture mode for encoders
+
   //initTimer1Aint();         // Initialize Timer1 interruption
   //adcInitialization();      // Initialize ADC to read currents
-  //SysTickInit();            // Initialize Systick interrupt
-
-  PWM1_3_CMPA_R = m_iDutyCycleX;
-  PWM1_3_CMPB_R = m_iDutyCycleY;
-  PWM1_2_CMPA_R = m_iDutyCycleZ;
+  SysTickInit();            // Initialize Systick interrupt
   while(1){
       //Do something
+      if (m_iDutyCycleX==0)
+             m_iDutyCycleX=4999;
+         if (m_iDutyCycleY==0)
+             m_iDutyCycleY=4999;
+         if (m_iDutyCycleZ==0)
+             m_iDutyCycleZ=4999;
+         m_iDutyCycleX = m_iDutyCycleX-100;
+         m_iDutyCycleY = m_iDutyCycleY-100;
+         m_iDutyCycleZ = m_iDutyCycleZ-100;
+         if (m_iDutyCycleX>4999)
+             m_iDutyCycleX=0;
+         if (m_iDutyCycleY>4999)
+             m_iDutyCycleY=0;
+         if (m_iDutyCycleZ>4999)
+             m_iDutyCycleZ=0;
+         PWM1_3_CMPA_R = m_iDutyCycleX;
+         PWM1_3_CMPB_R = m_iDutyCycleY;
+         PWM1_2_CMPA_R = m_iDutyCycleZ;
+         Delay(100);
   }
 }
 
@@ -553,8 +570,8 @@ void initTimer1Aint(void){
     TIMER1_TAMR_R = 0x02;          // Select periodic down counter mode of timer1
     //TIMER1_TAPR_R = 250-1;         // TimerA prescaler value 250 (64KHz)
     //TIMER1_TAILR_R = 32-1 ;     // TimerA counter starting count down value from 1ms
-    TIMER1_TAILR_R = 16000-1 ;     // TimerA counter starting count down value from 200ms
-    //TIMER1_TAILR_R = 64000-1 ;     // TimerA counter starting count down value from 1s
+    //TIMER1_TAILR_R = 16000-1 ;     // TimerA counter starting count down value from 200ms
+    TIMER1_TAILR_R = 64000-1 ;     // TimerA counter starting count down value from 1s
     TIMER1_ICR_R = 0x1;            // TimerA timeout flag bit clears
 
     // Enable timer 1 interrupt
@@ -663,45 +680,94 @@ void countersInit(void){
     TIMER0_TBPR_R = 0xFF;                       // Activate Pre-scaler, creating 24-bit TIMER0B
     TIMER0_IMR_R |= ((1<<2)|(1<<10));           // Enable capture match interrupt
     TIMER0_ICR_R = ((1<<2)|(1<<10));            // Clear TIMER0A and TIMER0B capture match flag
-    TIMER0_CTL_R |= ((1<<0)|(1<<8));            // Enable Timer2A 24-b, +edge, interrupts
+    //TIMER0_CTL_R |= ((1<<0)|(1<<8));            // Enable Timer2A 24-b, +edge, interrupts
+    TIMER0_CTL_R |= (1<<8);            // Enable Timer2A 24-b, +edge, interrupts
 
-    //Enable interrupts
+    //Enable priority
     NVIC_PRI4_R |= (NVIC_PRI4_R&0x00FFFFFF)|(0x01<<29);               //Timer0A=priority 1
     NVIC_PRI5_R |= (NVIC_PRI5_R&0x00FFFFFF)|(0x02<<5)|(0x03<<29);     //Timer0B=priority 2 and Timer2A=priority 3
+}
+
+void EnableCountersInt(void){
+    //Enable interrupts
     NVIC_EN0_R |= ((1<<19)|(1<<20));                                 // Enable interrupt 19 and 20 in NVIC
     NVIC_EN0_R |= 1<<23;                                             // Enable interrupt 23 in NVIC
 }
 
+void DisableCountersInt(void){
+    //Disable interrupts
+    NVIC_DIS0_R |= ((1<<19)|(1<<20));                                 // Disable interrupt 19 and 20 in NVIC
+    NVIC_DIS0_R |= 1<<23;                                             // Disable interrupt 23 in NVIC
+}
+
 void Timer2A_Handler(void){
-    TIMER2_ICR_R |= (1<<2);                                   // Acknowledge timer0A capture
-    m_uiPeriodZ = 53333333/((m_uiFirstZ - TIMER2_TAR_R)&0x00FFFFFF);     // 62.5ns resolution
-    m_uiFirstZ = TIMER2_TAR_R;                                // Setup for next
+    TIMER2_ICR_R |= (1<<2);                                             // Acknowledge timer0A capture
+    m_uiPeriodZ = 53333333/((m_uiFirstZ - TIMER2_TAR_R)&0x00FFFFFF);    // 62.5ns resolution
+    m_uiFirstZ = TIMER2_TAR_R;                                          // Setup for next
+/*
+    // Update past samples buffer
+    for(int i = m_iRwWindowSize-2; i >= 0; i--){
+        // Shift data
+        m_iRwZ[i+1]=m_iRwZ[i];
+    }
+    // Get new sample and restart m_iRwnCurrent variables
+    m_iRwZ[0]=m_uiPeriodZ;
+
+    NVIC_DIS0_R |= (1<<23);                                             // Disable timer 2A interrupt
+*/
 }
 
 void Timer0A_Handler(void){
-    TIMER0_ICR_R |= (1<<2);                                   // Acknowledge timer0A capture
-    m_uiPeriodX = 53333333/((m_uiFirstX - TIMER0_TAR_R)&0x00FFFFFF);     // 62.5ns resolution
-    m_uiFirstX = TIMER0_TAR_R;                                // Setup for next
-
-    // REACTION WHEELS RATES - MOBILE AVERAGE FILTER
-           // Update past samples buffer
-           for(int i = m_iRwWindowSize-2; i >= 0; i--){
-               // Shift data
-               m_iRwX[i+1]=m_iRwX[i];
-               m_iRwY[i+1]=m_iRwY[i];
-               m_iRwZ[i+1]=m_iRwZ[i];
-           }
-
-               // Get new sample and restart m_iRwnCurrent variables
-               m_iRwX[0]=m_uiPeriodX;
-               m_iRwY[0]=m_uiPeriodY;
-               m_iRwZ[0]=m_uiPeriodZ;
+    TIMER0_ICR_R |= (1<<2);                                             // Acknowledge timer0A capture
+    //if(m_cCounter == 0){
+    //    m_uiFirstX = TIMER0_TAR_R;                                          // Setup for next
+    //} else {
+        m_uiPeriodX = ((m_uiFirstX - TIMER0_TAR_R)&0x00FFFFFF);             //62.5ns resolution
+        m_uiFirstX = TIMER0_TAR_R;                                          // Setup for next
+        // Update past samples buffer
+        for(int i = m_iRwWindowSize-2; i >= 0; i--){
+            // Shift data
+            m_iRwX[i+1]=m_iRwX[i];
+        }
+        // Get new sample and restart m_iRwnCurrent variables
+        m_iRwX[0]=m_uiPeriodX;
+    //}
+    m_cCounter++;
+    if(m_cCounter == m_iRwWindowSize+1){
+        m_uiRwRateX = 0;
+        // Perform the mobile average
+        for(int i = 0; i < m_iRwWindowSize; i++){
+            m_uiRwRateX += m_iRwX[i]/m_iRwWindowSize;
+        }
+        m_uiRwRateX = 53333333/m_uiPeriodX;
+        // Reset counter
+        m_cCounter = 0;
+        // Disable and Reset timer 0A
+        TIMER0_CTL_R &= ~(1<<0);
+        TIMER0_TAV_R = 0X00;
+        TIMER0_TAR_R = 0X00;
+        // Enable next thread
+        NVIC_DIS0_R |= (1<<19);       // Disable timer 0A interrupts
+        NVIC_EN0_R |= (1<<20);        // Enable timer 0B interrupts
+    }
 }
 
 void Timer0B_Handler(void){
-    TIMER0_ICR_R |= (1<<10);                                   // Acknowledge timer0A capture
-    m_uiPeriodY = 53333333/((m_uiFirstY - TIMER0_TBR_R)&0x00FFFFFF);      // 62.5ns resolution
-    m_uiFirstY  = TIMER0_TBR_R;                                // setup for next
+    TIMER0_ICR_R |= (1<<10);                                            // Acknowledge timer0A capture
+    m_uiPeriodY = 53333333/((m_uiFirstY - TIMER0_TBR_R)&0x00FFFFFF);    // 62.5ns resolution
+    m_uiFirstY  = TIMER0_TBR_R;                                         // setup for next
+/*
+    // Update past samples buffer
+    for(int i = m_iRwWindowSize-2; i >= 0; i--){
+        // Shift data
+        m_iRwY[i+1]=m_iRwY[i];
+    }
+    // Get new sample and restart m_iRwnCurrent variables
+    m_iRwY[0]=m_uiPeriodY;
+
+    NVIC_DIS0_R |= (1<<20);                                             // Disable timer 0B interrupts
+    NVIC_EN0_R |= (1<<23);                                              // Enable timer 2A interrupts
+*/
 }
 
 /* void adcInitialization(void)
@@ -785,28 +851,22 @@ void ADC0SS2_Handler(void){
 }
 
 void SysTickInit(void){
-    //NVIC_ST_RELOAD_R = 15999999;   // One second delay 1s relaod value
+    NVIC_ST_RELOAD_R = 15999999;   // One second delay 1s relaod value
     //NVIC_ST_RELOAD_R = 7999999;   // One second delay 0.5s relaod value
-    NVIC_ST_RELOAD_R = 19999;   // One second delay 1ms relaod value
+    //NVIC_ST_RELOAD_R = 19999;   // One second delay 1ms relaod value
     NVIC_ST_CTRL_R = 0x07;      // Enable counter, interrupt and select system bus clock
     NVIC_ST_CURRENT_R = 0;      // Initialize current value register
 }
 
 void SysTick_Handler(void){
-    // LOCAL VARIABLES
-    // Torque controller
-    float rwAccX, rwAccY, rwAccZ;    // Reaction wheels acceleration
-    float Tx,Ty,Tz;                  // Current calculated torque
-    float errorX, errorY,errorZ;     // Current torque error
-    int rawX,rawY,rawZ;              // Raw PWM commands
-    // PID controller
-    float eRoll,ePitch,eYaw;         // Euler Angle errors
-    float eRollD,ePitchD,eYawD;      // Euler angle error rates
+    // Enable Timers interrupt sequence for encoders
 
-    // Quaternion feedback controller
-    float Tcx,Tcy,Tcz;              // Calculated torque command
+        TIMER0_CTL_R |= (1<<0);     // Enable timer0A
+        NVIC_EN0_R |= (1<<19);      //Enable timer0A interrupt
+
 
     // REACTION WHEELS RATES - MOBILE AVERAGE FILTER
+        /*
     // Update past samples buffer
     for(int i = m_iRwWindowSize-2; i >= 0; i--){
         // Shift data
@@ -834,122 +894,6 @@ void SysTick_Handler(void){
     m_uiRwRateY=m_uiRwRateY*2*PI/60;
     m_uiRwRateZ=m_uiRwRateZ*2*PI/60;
 
-    // GET MPU6050 DATA and quaternions
-    MPU6050_getData(m_iMpuRawData);
-    // Convert Readings
-    m_fAX = (float)m_iMpuRawData[0]/16384.0;
-    m_fAY = (float)m_iMpuRawData[1]/16384.0;
-    m_fAZ = (float)m_iMpuRawData[2]/16384.0;
-    m_fGX = (float)m_iMpuRawData[4]/131.1;
-    m_fGY = (float)m_iMpuRawData[5]/131.1;
-    m_fGZ = (float)m_iMpuRawData[6]/131.1;
-    //t = ((float)MPURawData[3]/340.00)+36.53;
-
-    //Get Euler angles (grados)
-    /*
-    m_fRoll = atan(m_fAY  / sqrt(pow(m_fAX, 2) + pow(m_fAZ, 2))) * (180.0 / 3.14);
-    m_fPitch = atan(m_fAX / sqrt(pow(m_fAY, 2) + pow(m_fAZ, 2))) * (180.0 / 3.14);
-    m_fYaw += m_fGZ * dt;
+    EnableCountersInt();
     */
-
-    //Get Euler angles (rad)
-    m_fRoll = atan(m_fAY  / sqrt(pow(m_fAX, 2) + pow(m_fAZ, 2)));
-    m_fPitch = atan(m_fAX / sqrt(pow(m_fAY, 2) + pow(m_fAZ, 2)));
-    m_fYaw += m_fGZ *(3.14/180)* dt;
-
-    //Get quaternions
-    //QuaternionFromEuler(m_fq, m_fRoll ,m_fPitch ,m_fYaw);
-
-    // PERFORM CONTROL LAW
-    // AUTOMATIC MODE
-    if(m_cMode == 'A'){
-        // PID CONTROLLER
-        // Euler angle error
-        eRoll = 0 - m_fRoll;
-        ePitch = 0 - m_fPitch;
-        eYaw = 0 - m_fYaw;
-        // Integrate Error
-        eRollI += eRoll*dt;
-        ePitchI += ePitch*dt;
-        eYawI += eYaw*dt;
-        // Error rate
-        eRollD = (m_fRoll-m_fRollAnt)/dt;
-        ePitchD = (m_fPitch-m_fPitchAnt)/dt;
-        eYawD = (m_fYaw-m_fYawAnt)/dt;
-        // Perform PID controller
-        Tcx=-0.0601250836449178*eRoll-0.113131194659226*eRollI-0.005934861149*eRollD;
-        Tcy=-0.0601250836449178*ePitch-0.113131194659226*ePitchI-0.005934861149*ePitchD;
-        Tcz=-0.0601250836449178*eYaw-0.113131194659226*eYawI-0.005934861149*eYawD;
-
-        // TORQUE CONTROLLER
-        // Calculate torque
-        // Get acceleration
-        rwAccX = ((m_uiRwRateX-m_uiRwRateXant)/dt);
-        rwAccY = ((m_uiRwRateY-m_uiRwRateYant)/dt);
-        rwAccZ = ((m_uiRwRateZ-m_uiRwRateZant)/dt);
-        // Get current torque
-        Tx = ReactioWheelInertia*rwAccX;
-        Ty = ReactioWheelInertia*rwAccY;
-        Tz = ReactioWheelInertia*rwAccZ;
-        //Get Torque error
-        errorX = Tcx-Tx;
-        errorY = Tcy-Ty;
-        errorZ = Tcz-Tz;
-        //Integrate torque error
-        errorXi += errorX*dt;
-        errorYi += errorY*dt;
-        errorZi += errorZ*dt;
-        //Calculate speed command
-        rawX = Icoeficient*errorXi;
-        rawY = Icoeficient*errorYi;
-        rawZ = Icoeficient*errorZi;
-        m_iDutyCycleX = abs(rawX);
-        m_iDutyCycleY = abs(rawY);
-        m_iDutyCycleZ = abs(rawZ);
-        //Check for negative torques
-        if (rawX>0)
-            m_bDirectionX = true;
-        else
-            m_bDirectionX = false;
-        if (rawY>0)
-            m_bDirectionY = true;
-        else
-            m_bDirectionY = false;
-        if (rawZ>0)
-            m_bDirectionZ = false;
-        else
-            m_bDirectionZ = true;
-
-        //Update values
-        m_uiRwRateXant = m_uiRwRateX;
-        m_uiRwRateYant = m_uiRwRateY;
-        m_uiRwRateZant = m_uiRwRateZ;
-        m_fRollAnt = m_fRoll;
-        m_fPitchAnt = m_fPitch;
-        m_fYawAnt = m_fYaw;
-    }
-    // Saturate outputs
-    if(m_iDutyCycleX>4999)
-        m_iDutyCycleX = 4999;
-    if(m_iDutyCycleY>4999)
-        m_iDutyCycleY = 4999;
-    if(m_iDutyCycleZ>4999)
-        m_iDutyCycleZ = 4999;
-    // Send Speed Command
-    PWM1_3_CMPA_R = m_iDutyCycleX;
-    PWM1_3_CMPB_R = m_iDutyCycleY;
-    PWM1_2_CMPA_R = m_iDutyCycleZ;
-    // Send Direction pin
-    if (m_bDirectionX)
-        GPIO_PORTA_DATA_R |= (1<<5);
-    else
-        GPIO_PORTA_DATA_R &= ~(1<<5);
-    if (m_bDirectionY)
-        GPIO_PORTA_DATA_R |= (1<<3);
-    else
-        GPIO_PORTA_DATA_R &= ~(1<<3);
-    if (m_bDirectionZ)
-        GPIO_PORTA_DATA_R |= (1<<4);
-    else
-        GPIO_PORTA_DATA_R &= ~(1<<4);
 }
