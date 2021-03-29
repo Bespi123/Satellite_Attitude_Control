@@ -65,7 +65,11 @@ bool MPU6050_Init(void);
 void MPU6050_getData(int16_t *MPURawData);
 
 // Counter Timer Functions
-void countersInit(void);
+void countersTimeInit(void);
+void countersCaptureInit(void);
+int timerA2Capture(void);
+int timerA0Capture(void);
+int timerB0Capture(void);
 void EnableCountersInt(void);
 void DisableCountersInt(void);
 
@@ -82,21 +86,24 @@ void enable_PWM(void);
 //SysTick function
 void SysTickInit(void);
 
+// Controller and attitude functions
+void GetEulerAngles(float *Acc, float *gyro, float *Euler);
+void attitudeControlLaw(float *SetPoint, float *Euler, float *EulerAnt, float *ControlTorque);
+void torqueCalculation(float *torque, float *rwRates, float *rwRatesAnt);
+void torqueController(float *torque, float *ControlTorque);
+
 // Other functions
 void Delay(unsigned long counter);
 
 //----------------PROGRAM GLOBAL VARIABLES--------------------
-char m_cMesg[100];                                          // Buffer to send
-unsigned char m_cMode = 'A';                                // Mode variable
+char m_cMesg[100];              // Buffer to send
+unsigned char m_cMode = 'A';    // Mode variable
 
 //----------------------RW Controller Variables---------------------
-float Icoeficient = 15673894481;
-//#define ReactioWheelInertia 0.0000005
-#define ReactioWheelInertia 0.00002
-//float ReactioWheelInertia = 1;
-float dt = 0.0012;
-//float dt = 1;
-float errorXi = 0,errorYi = 0,errorZi = 0;  // Current torque error integral
+#define Icoeficient = 15673894481;          // I controller coeficient
+#define ReactioWheelInertia 0.0000005;      // Reaction wheel inertia
+#define DT 0.100;                           // Period of sample
+float m_itorque[3];                  // Current calculated Torque
 
 //---------------CURRENT SENSORS VARIABLES---------------------
 //Filter variables (Mobile Average Filter)
@@ -125,22 +132,24 @@ uint32_t m_uiPeriodX, m_uiPeriodY, m_uiPeriodZ;        // 24-bit, 65.5 ns units
 uint32_t static m_uiFirstX, m_uiFirstY, m_uiFirstZ;    // Timer0A first edge
 volatile unsigned char m_cCounter=0;                   // Counter to control encoder flow
 
-//Torque I controller variables
-const int m_iRwWindowSize = 20;                       // Window size
-volatile unsigned int m_iRwX[20];                     // Buffer to store past outputs
-volatile unsigned int m_iRwY[20];                     // Buffer to store past outputs
-volatile unsigned int m_iRwZ[20];                     // Buffer to store past outputs
-unsigned int m_uiRwRateX,m_uiRwRateY, m_uiRwRateZ;        // Filtered reaction wheels
-float m_uiRwRateXant,m_uiRwRateYant, m_uiRwRateZant;      // Anterior Filtered reaction wheels
+const int m_iRwWindowSize = 20;            // Window size
+volatile unsigned int m_iRwX[20];          // Buffer to store past outputs
+volatile unsigned int m_iRwY[20];          // Buffer to store past outputs
+volatile unsigned int m_iRwZ[20];          // Buffer to store past outputs
+float m_uiRwRates[3];             // Filtered reaction wheels
+float m_uiRwRatesAnt[3];          // Filtered reaction wheels past sample
 
 //-------------MPU AND KINETICS VARIABLES-----------------------
-int16_t m_iMpuRawData[7];                             // MPU6050 raw data
-float m_fAX, m_fAY, m_fAZ, m_fGX,m_fGY,m_fGZ;         // MPU6050 data
-float m_fRoll, m_fPitch, m_fYaw;                      // Euler Angles
-float eRollI=0,ePitchI=0,eYawI=0;                           // Euler Angles integer rates
-float m_fRollAnt,m_fPitchAnt,m_fYawAnt;               // Euler Angles past samples
+float m_fq[4];                             // Attitude quaternion
+float m_fEulerAngles[3];                   // Euler Angles
+int16_t m_iMpuRawData[7];                  // MPU6050 raw data
+float m_fAcc[3], m_fGyro[3];               // MPU6050 data
+float m_fEulerAngles_ant[3];               // Euler Angles past samples
 
-float m_fq[4];                                        // Attitude quaternion
+//------------ATTITUDE CONTROLLER VARIABLE-----------------------
+float m_ftorqueCommand[3];                 // Commands Torques
+float m_fsetPoint[3] = {0,0,0};            // Set Points in Euler Angles (rad)
+
 //---------------------MAIN PROGRAM---------------------
 int main(void){
   I2c1_begin();             // Initialize I2C port
@@ -151,7 +160,7 @@ int main(void){
   Delay(1000);
   initDirectionPins();      // Initialize CW/CCW Pines
   enable_PWM();             // Enable PWM channels
-  countersInit();           // Initialize timers capture mode for encoders
+  countersCaptureInit();           // Initialize timers capture mode for encoders
 
   //initTimer1Aint();         // Initialize Timer1 interruption
   //adcInitialization();      // Initialize ADC to read currents
@@ -176,10 +185,11 @@ int main(void){
          PWM1_3_CMPA_R = m_iDutyCycleX;
          PWM1_3_CMPB_R = m_iDutyCycleY;
          PWM1_2_CMPA_R = m_iDutyCycleZ;
-         Delay(100);
+         Delay(1000);
   }
 }
 
+//--------------------------MPU6050 FUNCTIONS----------------------------
 /* bool MPU6050_Init(void)
  * Description:
  * This function initialize the MPU6050 and performs its configuration.
@@ -225,6 +235,7 @@ void MPU6050_getData(int16_t *MPURawData){
     }
 }
 
+//--------------------------UART FUNCTIONS--------------------------
 /* void Uart5_begin(void)
  * Description:
  * This function initialize the UART5 Serial Port and starts UART 5 interrupt.
@@ -287,18 +298,6 @@ void UART5_printString(char *str){
     }
 }
 
-/*
-// copy from hardware RX FIFO to software RX FIFO
-// stop when hardware RX FIFO is empty or software RX FIFO is full
-void static copyHardwareToSoftware(void){
-    char letter;
-    while(((UART0_FR_R&UART_FR_RXFE)==0)&&(RxFifo_Size() < (FIFOSIZE-1))){
-        letter = UART0_DR_R;
-        RxFifo_Put(letter);
-    }
-}
-*/
-
 /* void UART5_Handler(void){
  * Description:
  * This function manage the UART5 interruption.
@@ -347,6 +346,7 @@ void UART5_Handler(void){
     }
 }
 
+//---------------------I2C Functions------------------------------------
 /* void I2c1_begin(void)
  *
  * Description:
@@ -493,6 +493,7 @@ void Delay(unsigned long counter){
     for(i=0; i< counter*10000; i++);
 }
 
+//---------------------------PWM Funtions-------------------------------
 /* void enable_PWM(void)
  * Description:
  * This function initialize the PWM ports for every reaction wheel
@@ -544,6 +545,7 @@ void enable_PWM(void){
     PWM1_ENABLE_R = (1<<4)|(1<<6)|(1<<7);  // Enable PWM1 channels 4,6,7 output
 }
 
+//----------------------- Direction pins functions--------------------------------
 /* void initDirectionPins(void)
  * Description:
  * This function initialize the CCW/CW ports for every reaction wheel
@@ -562,6 +564,8 @@ void initDirectionPins(void){
     GPIO_PORTA_DEN_R |= (1<<4)|(1<<5)|(1<<3);    // make PORTA3-5 digital pins
 }
 
+
+//------------------------ Timer based interruptions functions ----------------------
 void initTimer1Aint(void){
     //Enable timer1
     SYSCTL_RCGCTIMER_R |= (1<<1);  // Enable clock Timer1 subtimer A in run mode
@@ -583,7 +587,7 @@ void initTimer1Aint(void){
 
 void timerA1Handler(void){
     if(TIMER1_MIS_R & 0x01){
-
+/*
         // REACTION WHEELS RATES - MOBILE AVERAGE FILTER
         // Update past samples buffer
         for(int i = m_iRwWindowSize-2; i >= 0; i--){
@@ -600,32 +604,33 @@ void timerA1Handler(void){
             m_uiRwRateX = 0;
             m_uiRwRateY = 0;
             m_uiRwRateZ = 0;
-/*
+
             // Perform the mobile average
             for(int i = 0; i < m_iRwWindowSize; i++){
                 m_uiRwRateX += m_iRwX[i]/m_iRwWindowSize;
                 m_uiRwRateY += m_iRwY[i]/m_iRwWindowSize;
                 m_uiRwRateZ += m_iRwZ[i]/m_iRwWindowSize;
             }
-            */
+
         sprintf(m_cMesg, "%d, %d, %d \n", m_uiPeriodX, m_uiPeriodY, m_uiPeriodZ);
         UART5_printString(m_cMesg);
+*/
     }
-
     TIMER1_ICR_R = 0X01;                // TA1 Timeout flag
 }
 
-/* void countersInit(void)
+//-------------------------------Timers used for RPM Measurements functions-----------------------------
+/* void countersTimeInit(void)
  * Description:
- * This function initialize timers as counter timer capture mode to read reaction
+ * This function initialize timers as counter timer time mode to read reaction
  * wheels rates.
  * the pines and timers are distributed in the following array:
  * PF4 (TIMER2A) ---> RW1 (Z axis)
  * PB6 (TIMER0A) ---> RW2 (X axis)
  * PB7 (TIMER0B) ---> RW3 (Y axis)
  */
-void countersInit(void){
-
+void countersTimeInit(void){
+/*
     //Enable timer2A and Port F
     SYSCTL_RCGCTIMER_R |= (1<<2);               // Enable clock to Timer 2
     while((SYSCTL_PRTIMER_R & (1<<2))==0);      // Wait until clock is initialized
@@ -686,6 +691,223 @@ void countersInit(void){
     //Enable priority
     NVIC_PRI4_R |= (NVIC_PRI4_R&0x00FFFFFF)|(0x01<<29);               //Timer0A=priority 1
     NVIC_PRI5_R |= (NVIC_PRI5_R&0x00FFFFFF)|(0x02<<5)|(0x03<<29);     //Timer0B=priority 2 and Timer2A=priority 3
+*/
+}
+
+void Timer2A_Handler(void){
+    //----Local variables----
+    volatile unsigned int PeriodZ;   // Period with 62.5ns resolution
+
+    // Acknowledge timer2A
+    TIMER2_ICR_R |= (1<<2);
+
+    //----Calculate amount of time----
+    PeriodZ = ((m_uiFirstZ - TIMER2_TAR_R)&0x00FFFFFF);  // Period in 62.5ns resolution
+    m_uiFirstZ = TIMER2_TAR_R;                           // Update time
+
+    //----Update Buffer----
+    // Update past samples buffer
+    for(int i = m_iRwWindowSize-2; i >= 0; i--){
+        // Shift data
+        m_iRwZ[i+1]=m_iRwZ[i];
+    }
+    // Get new sample and restart m_iRwnCurrent variables
+    m_iRwZ[0]=PeriodZ;
+
+    //----Update Counter----
+    m_cCounter++;
+
+    //----Get average----
+    if(m_cCounter == (m_iRwWindowSize-1)){
+    /*
+        m_uiRwRateX = 0;
+        // Perform the mobile average
+        for(int i = 0; i < m_iRwWindowSize; i++){
+            m_uiRwRateX += (53333333/m_iRwX[i])/m_iRwWindowSize;
+        }
+        m_uiPeriodX = 53333333*m_uiRwRateX;
+    */
+        // Reset counter
+        m_cCounter = 0;
+
+        //----Disable and Reset timer 0A----
+        TIMER2_CTL_R &= ~(1<<0);
+        TIMER2_TAV_R = 0X00;
+        TIMER2_TAR_R = 0X00;
+
+        //----Enable next thread----
+        NVIC_DIS0_R |= (1<<23);       // Disable GPT2A interrupts
+    }
+}
+
+void Timer0A_Handler(void){
+    //----Local variables----
+    volatile unsigned int PeriodX;   // Period with 62.5ns resolution
+
+    // Acknowledge timer0A capture
+    TIMER0_ICR_R |= (1<<2);
+
+    //----Calculate amount of time----
+    PeriodX = ((m_uiFirstX - TIMER0_TAR_R)&0x00FFFFFF);  // Period in 62.5ns resolution
+    m_uiFirstX = TIMER0_TAR_R;                           // Update time
+
+    //----Update Buffer----
+    // Update past samples buffer
+    for(int i = m_iRwWindowSize-2; i >= 0; i--){
+        // Shift data
+        m_iRwX[i+1]=m_iRwX[i];
+    }
+    // Get new sample and restart m_iRwnCurrent variables
+    m_iRwX[0]=PeriodX;
+
+    //----Update Counter----
+    m_cCounter++;
+
+    //----Get average----
+    if(m_cCounter == (m_iRwWindowSize-1)){
+        /*
+        m_uiRwRateX = 0;
+        // Perform the mobile average
+        for(int i = 0; i < m_iRwWindowSize; i++){
+            m_uiRwRateX += (53333333/m_iRwX[i])/m_iRwWindowSize;
+        }
+        m_uiPeriodX = 53333333*m_uiRwRateX;
+        */
+        // Reset counter
+        m_cCounter = 0;
+
+        //----Disable and Reset timer 0A----
+        TIMER0_CTL_R &= ~(1<<0);
+        TIMER0_TAV_R = 0X00;
+        TIMER0_TAR_R = 0X00;
+
+        //----Enable next thread----
+        NVIC_DIS0_R |= (1<<19);       // Disable GPT0A interrupts
+        NVIC_EN0_R |= (1<<20);        // Enable GPT0B interrupts
+        TIMER0_CTL_R |= (1<<8);       // Enable timer0B
+    }
+}
+
+void Timer0B_Handler(void){
+    //----Local variables----
+    volatile unsigned int PeriodY;   // Period with 62.5ns resolution
+
+    // Acknowledge timer0B capture
+    TIMER0_ICR_R |= (1<<10);
+
+    //----Calculate amount of time----
+    PeriodY = ((m_uiFirstY - TIMER0_TBR_R)&0x00FFFFFF);  // Period in 62.5ns resolution
+    m_uiFirstY = TIMER0_TBR_R;                           // Update time
+
+    //----Update Buffer----
+    // Update past samples buffer
+    for(int i = m_iRwWindowSize-2; i >= 0; i--){
+        // Shift data
+        m_iRwY[i+1]=m_iRwY[i];
+    }
+    // Get new sample and restart m_iRwnCurrent variables
+    m_iRwY[0]=PeriodY;
+
+    //----Update Counter----
+    m_cCounter++;
+
+    //----Get average----
+    if(m_cCounter == (m_iRwWindowSize-1)){
+        /*
+        m_uiRwRateX = 0;
+        // Perform the mobile average
+        for(int i = 0; i < m_iRwWindowSize; i++){
+            m_uiRwRateX += (53333333/m_iRwX[i])/m_iRwWindowSize;
+        }
+        m_uiPeriodX = 53333333*m_uiRwRateX;
+        */
+        // Reset counter
+        m_cCounter = 0;
+
+        //----Disable and Reset timer 0B----
+        TIMER0_CTL_R &= ~(1<<8);
+        TIMER0_TBV_R = 0X00;
+        TIMER0_TBR_R = 0X00;
+
+        //----Enable next thread----
+        NVIC_DIS0_R |= (1<<20);       // Disable GPT0B interrupts
+        NVIC_EN0_R |= (1<<23);        // Enable GPT2A interrupts
+        TIMER2_CTL_R |= (1<<8);       // Enable GPT2A
+    }
+}
+
+/* void countersCaptureInit(void)
+ * Description:
+ * This function initialize timers as counter timer mode to read reaction
+ * wheels rates.
+ * the pines and timers are distributed in the following array:
+ * PF4 (TIMER2A) ---> RW1 (Z axis)
+ * PB6 (TIMER0A) ---> RW2 (X axis)
+ * PB7 (TIMER0B) ---> RW3 (Y axis)
+ */
+void countersCaptureInit(void){
+    // Enable timer2A and portF
+    SYSCTL_RCGCTIMER_R |= (1<<2);           // Enable clock to Timer 2
+    while((SYSCTL_PRTIMER_R & (1<<2))==0);  // Wait until clock is initialized
+    SYSCTL_RCGCGPIO_R |= (1<<4);            // Enable clock to PORTF
+    while((SYSCTL_PRGPIO_R & (1<<4))==0);   // Wait until clock is initialized
+
+    //Enable PF4
+    GPIO_PORTF_DIR_R &= ~(1<<4);       // Make PF4 an input pin
+    GPIO_PORTF_DEN_R |= (1<<4);        // Make PF4 a digital pin
+    GPIO_PORTF_AFSEL_R |= (1<<4);      // Enable alternate function on PF4
+    GPIO_PORTF_PCTL_R &= ~0x000F0000;  // Configure PF4 as T2CCP0 pin
+    GPIO_PORTF_PCTL_R |= 0x000070000;
+
+    //Set timer as input-edge counter mode
+    TIMER2_CTL_R &= ~(1<<0);        // Disable TIMER2A in setup
+    TIMER2_CFG_R |= (1<<2);         // Configure as 16-bit timer mode
+    TIMER2_TAMR_R = 0x13;           // Up-count, edge-count, capture mode
+    TIMER2_TAMATCHR_R = 0xFFFF;     // Set the count limit
+    TIMER2_TAPMR_R = 0xFF;          // To 0xFFFFFF with prescaler
+    TIMER2_CTL_R &= ~(1<<3);        // Capture the rising edge
+    TIMER2_CTL_R &= ~(1<<2);        // Capture the rising edge
+
+    //Enable timer0 and portB
+    SYSCTL_RCGCTIMER_R |= (1<<0);           // Enable clock to Timer 0
+    while((SYSCTL_PRTIMER_R & (1<<0))==0);  // Wait until clock is initialized
+    SYSCTL_RCGCGPIO_R |= (1<<1);            // Enable clock to PORTB
+    while((SYSCTL_PRGPIO_R & (1<<1))==0);   // Wait until clock is initialized
+
+    //Enable PB6 - PB7
+    GPIO_PORTB_DIR_R &= ~((1<<6) | (1<<7));   // Make PB6, PB7 an input pin
+    GPIO_PORTB_DEN_R |= (1<<6) | (1<<7);      // Make PB6, PB7 a digital pin
+    GPIO_PORTB_AFSEL_R |= (1<<6) | (1<<7);    // Enable alternate function on PB6, PB7
+    GPIO_PORTB_PCTL_R &= ~0xFF000000;         // Configure PB6 as T0CCP0
+    GPIO_PORTB_PCTL_R |= 0x77000000;
+
+    //Set timer as input-edge counter mode
+    TIMER0_CTL_R &= ~(1<<0);        // Disable TIMER0A in setup0
+    TIMER0_CTL_R &= ~(1<<8);        // Disable TIMER0B in setup
+    TIMER0_CFG_R |= (1<<2);         // Configure as 16-bit timer mode
+    TIMER0_TAMR_R = 0x13;           // Up-count, edge-count, capture mode TIMER A
+    TIMER0_TBMR_R = 0x13;           // Up-count, edge-count, capture mode TIMER B
+    TIMER0_TAMATCHR_R = 0xFFFF;     // Set the count limit TIMER A
+    TIMER0_TBMATCHR_R = 0xFFFF;     // Set the count limit TIMER B
+    TIMER0_TAPMR_R = 0xFF;          // To 0xFFFFFF with prescaler TIMER A
+    TIMER0_TBPMR_R = 0xFF;          // To 0xFFFFFF with prescaler TIMER B
+    TIMER0_CTL_R &= ~((1<<3)|(1<<2));          // Capture the rising edge TIMER A
+    TIMER0_CTL_R &= ~((1<<11)|(1<<10));        // Capture the rising edge TIMER B
+    TIMER0_CTL_R |= (1<<0);         // Enable Timer0A
+    TIMER0_CTL_R |= (1<<8);         // Enable Timer0B
+    TIMER2_CTL_R |= 0x01;           // Enable Timer2A
+}
+
+int timerA2Capture(void){
+    return TIMER2_TAR_R;
+}
+
+int timerA0Capture(void){
+    return TIMER0_TAR_R;
+}
+
+int timerB0Capture(void){
+    return TIMER0_TBR_R;
 }
 
 void EnableCountersInt(void){
@@ -700,76 +922,7 @@ void DisableCountersInt(void){
     NVIC_DIS0_R |= 1<<23;                                             // Disable interrupt 23 in NVIC
 }
 
-void Timer2A_Handler(void){
-    TIMER2_ICR_R |= (1<<2);                                             // Acknowledge timer0A capture
-    m_uiPeriodZ = 53333333/((m_uiFirstZ - TIMER2_TAR_R)&0x00FFFFFF);    // 62.5ns resolution
-    m_uiFirstZ = TIMER2_TAR_R;                                          // Setup for next
-/*
-    // Update past samples buffer
-    for(int i = m_iRwWindowSize-2; i >= 0; i--){
-        // Shift data
-        m_iRwZ[i+1]=m_iRwZ[i];
-    }
-    // Get new sample and restart m_iRwnCurrent variables
-    m_iRwZ[0]=m_uiPeriodZ;
-
-    NVIC_DIS0_R |= (1<<23);                                             // Disable timer 2A interrupt
-*/
-}
-
-void Timer0A_Handler(void){
-    TIMER0_ICR_R |= (1<<2);                                             // Acknowledge timer0A capture
-    //if(m_cCounter == 0){
-    //    m_uiFirstX = TIMER0_TAR_R;                                          // Setup for next
-    //} else {
-        m_uiPeriodX = ((m_uiFirstX - TIMER0_TAR_R)&0x00FFFFFF);             //62.5ns resolution
-        m_uiFirstX = TIMER0_TAR_R;                                          // Setup for next
-        // Update past samples buffer
-        for(int i = m_iRwWindowSize-2; i >= 0; i--){
-            // Shift data
-            m_iRwX[i+1]=m_iRwX[i];
-        }
-        // Get new sample and restart m_iRwnCurrent variables
-        m_iRwX[0]=m_uiPeriodX;
-    //}
-    m_cCounter++;
-    if(m_cCounter == m_iRwWindowSize+1){
-        m_uiRwRateX = 0;
-        // Perform the mobile average
-        for(int i = 0; i < m_iRwWindowSize; i++){
-            m_uiRwRateX += m_iRwX[i]/m_iRwWindowSize;
-        }
-        m_uiRwRateX = 53333333/m_uiPeriodX;
-        // Reset counter
-        m_cCounter = 0;
-        // Disable and Reset timer 0A
-        TIMER0_CTL_R &= ~(1<<0);
-        TIMER0_TAV_R = 0X00;
-        TIMER0_TAR_R = 0X00;
-        // Enable next thread
-        NVIC_DIS0_R |= (1<<19);       // Disable timer 0A interrupts
-        NVIC_EN0_R |= (1<<20);        // Enable timer 0B interrupts
-    }
-}
-
-void Timer0B_Handler(void){
-    TIMER0_ICR_R |= (1<<10);                                            // Acknowledge timer0A capture
-    m_uiPeriodY = 53333333/((m_uiFirstY - TIMER0_TBR_R)&0x00FFFFFF);    // 62.5ns resolution
-    m_uiFirstY  = TIMER0_TBR_R;                                         // setup for next
-/*
-    // Update past samples buffer
-    for(int i = m_iRwWindowSize-2; i >= 0; i--){
-        // Shift data
-        m_iRwY[i+1]=m_iRwY[i];
-    }
-    // Get new sample and restart m_iRwnCurrent variables
-    m_iRwY[0]=m_uiPeriodY;
-
-    NVIC_DIS0_R |= (1<<20);                                             // Disable timer 0B interrupts
-    NVIC_EN0_R |= (1<<23);                                              // Enable timer 2A interrupts
-*/
-}
-
+//----------------------------ADC Functions-----------------------------------
 /* void adcInitialization(void)
  * Description:
  * This function initialize adc in sequence 2 to read current consumption of
@@ -850,19 +1003,70 @@ void ADC0SS2_Handler(void){
     ADC0_PSSI_R |= (1<<2);
 }
 
+//-------------------------------SysTick functions--------------------------------
 void SysTickInit(void){
-    NVIC_ST_RELOAD_R = 15999999;   // One second delay 1s relaod value
-    //NVIC_ST_RELOAD_R = 7999999;   // One second delay 0.5s relaod value
+    //NVIC_ST_RELOAD_R = 15999999;   // One second delay 1s relaod value
+    NVIC_ST_RELOAD_R = 1599999;   // One second delay 0.1s relaod value
     //NVIC_ST_RELOAD_R = 19999;   // One second delay 1ms relaod value
     NVIC_ST_CTRL_R = 0x07;      // Enable counter, interrupt and select system bus clock
     NVIC_ST_CURRENT_R = 0;      // Initialize current value register
 }
 
 void SysTick_Handler(void){
-    // Enable Timers interrupt sequence for encoders
+    //Local variables
+    volatile unsigned int RwRateX;
+    volatile unsigned int RwRateY;
+    volatile unsigned int RwRateZ;
 
-        TIMER0_CTL_R |= (1<<0);     // Enable timer0A
-        NVIC_EN0_R |= (1<<19);      //Enable timer0A interrupt
+    // Get measured reaction wheels rates
+    RwRateX=timerA0Capture();
+    RwRateY=timerB0Capture();
+    RwRateZ=timerA2Capture();
+
+    // Reestart counters
+    TIMER0_CTL_R &= ~((1<<0)|(1<<8));   // Disable GPTM0A & GPTM0B
+    TIMER2_CTL_R &= ~(1<<0);            // Disable GPTM0A & GPTM0B
+    TIMER0_TAV_R = 0x00;
+    TIMER0_TBV_R = 0x00;
+    TIMER2_TAV_R = 0x00;
+    TIMER0_TAR_R = 0x00;
+    TIMER0_TBR_R = 0x00;
+    TIMER2_TAR_R = 0x00;
+
+
+    //----Update Buffers----
+    // Update past samples buffer
+    for(int i = m_iRwWindowSize-2; i >= 0; i--){
+        // Shift data
+        m_iRwX[i+1]=m_iRwX[i];
+        m_iRwY[i+1]=m_iRwY[i];
+        m_iRwZ[i+1]=m_iRwZ[i];
+    }
+    // Get new sample in RPM
+    m_iRwX[0]=33.33*RwRateX;
+    m_iRwY[0]=33.33*RwRateY;
+    m_iRwZ[0]=33.33*RwRateZ;
+
+    // Get Reaction Wheels in rad/s
+    m_uiRwRates[0]=RwRateX*2*PI/60;
+    m_uiRwRates[1]=RwRateY*2*PI/60;
+    m_uiRwRates[2]=RwRateZ*2*PI/60;
+
+    // GET MPU6050 DATA
+   GetEulerAngles(m_fAcc, m_fGyro, m_fEulerAngles);
+
+   // Perform attitude controller
+   attitudeControlLaw(m_fsetPoint, m_fEulerAngles, m_fEulerAngles_ant, m_ftorqueCommand);
+
+   // Perform torque controller
+   torqueCalculation(m_itorque, m_uiRwRates, m_uiRwRatesAnt);
+
+    // Enable timers
+    TIMER0_CTL_R |= (1<<0)|(1<<8);   // Disable GPTM0A & GPTM0B
+    TIMER2_CTL_R |= 1<<0;            // Disable GPTM0A & GPTM0B
+
+
+
 
 
     // REACTION WHEELS RATES - MOBILE AVERAGE FILTER
@@ -896,4 +1100,93 @@ void SysTick_Handler(void){
 
     EnableCountersInt();
     */
+}
+
+void GetEulerAngles(float *Acc, float *gyro, float *Euler){
+   // GET MPU6050 DATA
+   MPU6050_getData(m_iMpuRawData);
+   // Convert Readings
+   Acc[0]= (float)m_iMpuRawData[0]/16384.0;
+   Acc[1]= (float)m_iMpuRawData[1]/16384.0;
+   Acc[2]= (float)m_iMpuRawData[2]/16384.0;
+   gyro[0]= (float)m_iMpuRawData[4]/131.1;      // deg/s
+   gyro[1]= (float)m_iMpuRawData[5]/131.1;      // deg/s
+   gyro[2]= (float)m_iMpuRawData[6]/131.1;      // deg/s
+   //t = ((float)MPURawData[3]/340.00)+36.53;
+
+   //Get Euler angles (rad)
+   Euler[0]= atan(Acc[1] / sqrt(pow(Acc[0], 2) + pow(Acc[2], 2)));
+   Euler[1]= atan(Acc[0] / sqrt(pow(Acc[1], 2) + pow(Acc[2], 2)));
+   Euler[2] += gyro[2] *(PI/180) *DT;
+}
+
+void attitudeControlLaw(float *SetPoint, float *Euler, float *EulerAnt, float *ControlTorque){
+    // Local variables
+    volatile float eRoll,ePitch,eYaw;
+    volatile float eRollI,ePitchI,eYawI;
+    volatile float eRollD,ePitchD,eYawD;
+
+    // Euler angle error
+    eRoll  = SetPoint[0] - Euler[0];
+    ePitch = SetPoint[1] - Euler[1];
+    eYaw   = SetPoint[2] - Euler[2];
+
+    // Integrate Error
+    eRollI  += eRoll*DT;
+    ePitchI += ePitch*DT;
+    eYawI   += eYaw*DT;
+
+    // Error rate
+    eRollD  = (Euler[0]-EulerAnt[0])/DT;
+    ePitchD = (Euler[1]-EulerAnt[1])/DT;
+    eYawD   = (Euler[2]-EulerAnt[2])/DT;
+
+    // Perform PID controller
+    ControlTorque[0]=-0.0601250836449178*eRoll-0.113131194659226*eRollI-0.005934861149*eRollD;
+    ControlTorque[1]=-0.0601250836449178*ePitch-0.113131194659226*ePitchI-0.005934861149*ePitchD;
+    ControlTorque[2]=-0.0601250836449178*eYaw-0.113131194659226*eYawI-0.005934861149*eYawD;
+
+    // Update new variables
+    EulerAnt[0]=Euler[0];
+    EulerAnt[1]=Euler[1];
+    EulerAnt[2]=Euler[2];
+}
+
+void torqueCalculation(float *torque, float *rwRates, float *rwRatesAnt){
+    // Local Variables
+    volatile float rwAccX,rwAccY,rwAccZ;
+
+    // Get acceleration
+    rwAccX = (rwRates[0]-rwRatesAnt[0])/DT;
+    rwAccY = (rwRates[1]-rwRatesAnt[1])/DT;
+    rwAccZ = (rwRates[2]-rwRatesAnt[2])/DT;
+
+    // Get current torque
+    torque[0] = ReactioWheelInertia*rwAccX;
+    torque[1] = ReactioWheelInertia*rwAccY;
+    torque[2] = ReactioWheelInertia*rwAccZ;
+
+    // Update variables
+    rwRatesAnt[0] = rwRates[0];
+    rwRatesAnt[1] = rwRates[1];
+    rwRatesAnt[2] = rwRates[2];
+}
+
+void torqueController(float *torque, float *ControlTorque, float *rawCommand){
+    // Local Variables
+    float errorX, errorY, errorZ;
+    float errorXi,errorYi,errorZi
+    //Get Torque error
+    errorX = ControlTorque[0]-torque[0];
+    errorY = ControlTorque[1]-torque[1];
+    errorZ = ControlTorque[2]-torque[2];
+    //Integrate torque error
+    errorXi += errorX*DT;
+    errorYi += errorY*DT;
+    errorZi += errorZ*DT;
+
+    //Calculate speed command
+    rawCommand[0] = Icoeficient*errorXi;
+    rawCommand[1] = Icoeficient*errorYi;
+    rawCommand[2] = Icoeficient*errorZi;
 }
