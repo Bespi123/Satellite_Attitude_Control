@@ -104,7 +104,7 @@ bool m_bSent = false;           // Flag to send data
 
 //----------------------RW Controller Variables---------------------
 #define Icoeficient = 15673894481;          // I controller coeficient
-#define ReactioWheelInertia 0.0000005;      // Reaction wheel inertia
+#define ReactioWheelInertia 9.4e-7;      // Reaction wheel inertia
 #define DT 0.100;                           // Period of sample
 float m_itorque[3];         // Current calculated Torque
 float m_fTorqueI[3];        // Calculate torque integral
@@ -152,7 +152,7 @@ float m_feEulerI[3];                       // Euler error integer
 int main(void){
   I2c1_begin();             // Initialize I2C port
   Delay(1000);
-  //Uart5_begin();            // Initialize UART port
+  Uart5_begin();            // Initialize UART port
   Delay(1000);
   MPU6050_Init();           // Initialize MPU6050
   Delay(1000);
@@ -162,32 +162,12 @@ int main(void){
 
   //initTimer1Aint();         // Initialize Timer1 interruption
   //adcInitialization();      // Initialize ADC to read currents
-  SysTickInit();            // Initialize Systick interrupt
+  SysTickInit();              // Initialize Systick interrupt
   while(1){
-      /*
-      //Do something
-      if (m_iDutyCycleX==0)
-             m_iDutyCycleX=4999;
-         if (m_iDutyCycleY==0)
-             m_iDutyCycleY=4999;
-         if (m_iDutyCycleZ==0)
-             m_iDutyCycleZ=4999;
-         m_iDutyCycleX = m_iDutyCycleX-100;
-         m_iDutyCycleY = m_iDutyCycleY-100;
-         m_iDutyCycleZ = m_iDutyCycleZ-100;
-         if (m_iDutyCycleX>4999)
-             m_iDutyCycleX=0;
-         if (m_iDutyCycleY>4999)
-             m_iDutyCycleY=0;
-         if (m_iDutyCycleZ>4999)
-             m_iDutyCycleZ=0;
-         PWM1_3_CMPA_R = m_iDutyCycleX;
-         PWM1_3_CMPB_R = m_iDutyCycleY;
-         PWM1_2_CMPA_R = m_iDutyCycleZ;
-         Delay(1000);
-      */
       if(m_bSent){
-          Delay(1000);
+          sprintf(m_cMesg, "%.2f, %.2f, %.2f \n", m_fEulerAngles[0]*180/PI, m_fEulerAngles[1]*180/PI, m_fEulerAngles[2]*180/PI);
+          UART5_printString(m_cMesg);
+          m_bSent=false;
       }
   }
 }
@@ -342,10 +322,6 @@ void UART5_Handler(void){
     }else if((rx_data[0])== 239){
         //Change to automatic Mode
         m_cMode = 'A';
-        // Turn off motors
-        //m_iDutyCycleZ =  0;
-        //m_iDutyCycleX =  0;
-        //m_iDutyCycleY =  0;
     }
 }
 
