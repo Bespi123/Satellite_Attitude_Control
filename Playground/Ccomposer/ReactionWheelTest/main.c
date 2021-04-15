@@ -59,6 +59,7 @@ void initDirectionPins (void);
 void Uart5_begin(void);
 void UART5_printString(char *str);
 void UART5_Transmitter(unsigned char data);
+void UART5_sendBuffer(char *data, uint8_t bufferSize);
 
 //  MPU6050 Functions
 bool MPU6050_Init(void);
@@ -98,7 +99,8 @@ void sendRwCommands(uint16_t *dutyCycle, bool *sign,float *rawCommand);
 void Delay(unsigned long counter);
 
 //----------------PROGRAM GLOBAL VARIABLES--------------------
-char m_cMesg[100];              // Buffer to send
+//char m_cMesg[100];              // Buffer to send
+char m_cMesg[50];              // Buffer to send
 unsigned char m_cMode = 'A';    // Mode variable
 bool m_bSent = false;           // Flag to send data
 
@@ -147,8 +149,8 @@ float m_fEulerAngles_ant[3];               // Euler Angles past samples
 float m_ftorqueCommand[3];                 // Commands Torques
 float m_fsetPoint[] = {0,0,0};            // Set Points in Euler Angles (rad)
 float m_feEulerI[3];                       // Euler error integer
-
-//---------------------MAIN PROGRAM---------------------
+//float m_fPrueb[3]={5.2,3.0,5.2};
+//--------------------MAIN PROGRAM---------------------
 int main(void){
   I2c1_begin();             // Initialize I2C port
   Delay(1000);
@@ -165,8 +167,17 @@ int main(void){
   SysTickInit();              // Initialize Systick interrupt
   while(1){
       if(m_bSent){
-          sprintf(m_cMesg, "%.2f, %.2f, %.2f \n", m_fEulerAngles[0]*180/PI, m_fEulerAngles[1]*180/PI, m_fEulerAngles[2]*180/PI);
-          UART5_printString(m_cMesg);
+          //sprintf(m_cMesg, "%.2f, %.2f, %.2f \n", m_fEulerAngles[0]*180/PI, m_fEulerAngles[1]*180/PI, m_fEulerAngles[2]*180/PI);
+          m_cMesg[0] = 'i';
+          memcpy(m_cMesg+1,m_fEulerAngles,sizeof(m_fEulerAngles));
+          m_cMesg[13] = 'l';
+          memcpy(m_cMesg+14,m_fAcc,sizeof(m_fAcc));
+          m_cMesg[26] = 'o';
+          memcpy(m_cMesg+27,m_fGyro,sizeof(m_fGyro));
+          m_cMesg[39] = 'r';
+          memcpy(m_cMesg+40,m_uiRwRates,sizeof(m_uiRwRates));
+          UART5_sendBuffer(m_cMesg, 50);
+          //UART5_printString(m_cMesg);
           m_bSent=false;
       }
   }
@@ -281,6 +292,15 @@ void UART5_printString(char *str){
     }
 }
 
+/* void UART5_sendBuffer(char *data, uint8_t bufferSize){
+ * Description:
+ * Function to send a buffer through UART5
+ */
+void UART5_sendBuffer(char *data, uint8_t bufferSize){
+    for(char i=0; i< bufferSize; i++){
+        UART5_DR_R = data[i];
+    }
+}
 /* void UART5_Handler(void){
  * Description:
  * This function manage the UART5 interruption.
