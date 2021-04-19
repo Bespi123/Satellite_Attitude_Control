@@ -60,6 +60,7 @@ void Uart5_begin(void);
 void UART5_printString(char *str);
 void UART5_Transmitter(unsigned char data);
 void UART5_sendBuffer(char *data, uint8_t bufferSize);
+void sendEncodedData(char *data, uint8_t dataSize);
 
 //  MPU6050 Functions
 bool MPU6050_Init(void);
@@ -100,8 +101,9 @@ void Delay(unsigned long counter);
 
 //----------------PROGRAM GLOBAL VARIABLES--------------------
 //char m_cMesg[100];              // Buffer to send
-char m_cMesg[50];              // Buffer to send
+char m_cMesg[49];              // Buffer to send
 unsigned char m_cMode = 'A';    // Mode variable
+char m_fPrueba[] = {'A','B','C','D','E','F','G','H','I','J','K','L','M','N','O','P','Q','R','S','T','U','W','X','Y','Z'};   //Prueba
 bool m_bSent = false;           // Flag to send data
 
 //----------------------RW Controller Variables---------------------
@@ -169,15 +171,17 @@ int main(void){
       if(m_bSent){
           //sprintf(m_cMesg, "%.2f, %.2f, %.2f \n", m_fEulerAngles[0]*180/PI, m_fEulerAngles[1]*180/PI, m_fEulerAngles[2]*180/PI);
           m_cMesg[0] = 'i';
-          memcpy(m_cMesg+1,m_fEulerAngles,sizeof(m_fEulerAngles));
-          m_cMesg[13] = 'l';
-          memcpy(m_cMesg+14,m_fAcc,sizeof(m_fAcc));
-          m_cMesg[26] = 'o';
-          memcpy(m_cMesg+27,m_fGyro,sizeof(m_fGyro));
-          m_cMesg[39] = 'r';
-          memcpy(m_cMesg+40,m_uiRwRates,sizeof(m_uiRwRates));
-          UART5_sendBuffer(m_cMesg, 50);
+          //memcpy(m_cMesg+ 1,m_fPrueba,sizeof(m_fPrueba));
+          //memcpy(m_cMesg+13,m_fPrueba,sizeof(m_fPrueba));
+          //memcpy(m_cMesg+25,m_fPrueba,sizeof(m_fPrueba));
+          //memcpy(m_cMesg+37,m_fPrueba,sizeof(m_fPrueba));
+          memcpy(m_cMesg+ 1,m_fEulerAngles,sizeof(m_fEulerAngles));
+          memcpy(m_cMesg+13,m_fAcc        ,sizeof(m_fAcc)        );
+          memcpy(m_cMesg+25,m_fGyro       ,sizeof(m_fGyro)       );
+          memcpy(m_cMesg+37,m_uiRwRates   ,sizeof(m_uiRwRates)   );
+          //UART5_sendBuffer(m_cMesg, 50);
           //UART5_printString(m_cMesg);
+          sendEncodedData(m_cMesg,sizeof(m_cMesg));
           m_bSent=false;
       }
   }
@@ -299,8 +303,44 @@ void UART5_printString(char *str){
 void UART5_sendBuffer(char *data, uint8_t bufferSize){
     for(char i=0; i< bufferSize; i++){
         UART5_DR_R = data[i];
+        Delay(1);
     }
 }
+
+/*void sendEncodedData(char *data, uint8_t dataSize)
+ * Description:
+ * Function to encode and send a char array through UART5
+ * the encode algorithm is based in the API2 mode used by
+ * the Xbees.
+ */
+void sendEncodedData(char *data, uint8_t dataSize){
+    //Local variables
+    uint8_t add=0;
+    char message[50];
+
+    //Encode incoming data
+    //Check for special cases
+    for(uint8_t i = 1; i < dataSize; i++){
+        if(data[i] == 'i' || data[i] == 125)
+            add++;
+    }
+    //Create message and copy frame
+    uint8_t size = dataSize+add;
+    memcpy(message,data,dataSize);
+    //Replace special cases
+    for(uint8_t j = 1; j < size; j++){
+      if (message[j] == 'i' ||  message[j] == 125){
+        for(uint8_t k = size-1 ; k > j ; k--)
+            message[k+1] = message[k];
+        message[j+1] = message[j] ^ 32;
+        message[j] = 125;
+      }
+    }
+
+    //Send data through UART5
+    UART5_sendBuffer(message, size);
+}
+
 /* void UART5_Handler(void){
  * Description:
  * This function manage the UART5 interruption.
@@ -489,6 +529,7 @@ static int I2C_wait_till_done(void){
  */
 void Delay(unsigned long counter){
     unsigned long i = 0;
+
     for(i=0; i< counter*10000; i++);
 }
 
