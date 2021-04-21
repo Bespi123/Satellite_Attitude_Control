@@ -174,8 +174,7 @@ int main(void){
           //memcpy(m_cMesg+13,m_fAcc        ,sizeof(m_fAcc)        );
           //memcpy(m_cMesg+25,m_fGyro       ,sizeof(m_fGyro)       );
           //memcpy(m_cMesg+37,m_uiRwRates   ,sizeof(m_uiRwRates)   );
-
-                    //sendEncodedData(m_cMesg,sizeof(m_cMesg));
+          //sendEncodedData(m_cMesg,sizeof(m_cMesg));
           sprintf(m_cMesg, "i%.2f\t %.2f\t%.2f\n",
                   m_fEulerAngles[0], m_fEulerAngles[1], m_fEulerAngles[2]);
           UART5_printString(m_cMesg);
