@@ -96,6 +96,7 @@ void attitudeControlLaw(float *SetPoint, float *Euler, float *EulerAnt, float *e
 void torqueCalculation(float *torque, float *rwRates, float *rwRatesAnt);
 void torqueController(float *torque, float *ControlTorque, float *rawCommand, float *errorI);
 void sendRwCommands(uint16_t *dutyCycle, bool *sign,float *rawCommand);
+void sendRwComOpenLoop(uint16_t *dutyCycle, bool *sign);
 
 // Other functions
 void Delay(unsigned long counter);
@@ -103,7 +104,7 @@ void Delay(unsigned long counter);
 //----------------PROGRAM GLOBAL VARIABLES--------------------
 //char m_cMesg[100];              // Buffer to send
 char m_cMesg[49];              // Buffer to send
-unsigned char m_cMode = 'A';    // Mode variable
+unsigned char m_cMode = 'M';    // Mode variable
 //char m_fPrueba[] = {'A','B','C','D','E','F','G','H','I','J','K','L','M','N','O','P','Q','R','S','T','U','W','X','Y','Z'};   //Prueba
 bool m_bSent = false;           // Flag to send data
 
@@ -127,7 +128,7 @@ volatile unsigned int m_iRw2Current;     // ADC Current
 volatile unsigned int m_iRw3Current;     // ADC Current
 
 //--------------REACTION WHEELS COMMAND VARIABLES--------------
-uint16_t m_iDutyCycle[] =  {4999,4999,4999};    // RW PWM duty cycle
+uint16_t m_iDutyCycle[3];                       // RW PWM duty cycle
 bool m_bDirection[] =  {true, true, false};     // RW Direction
 
 //-------------REACTION WHEELS ENCODERS VARIABLES---------------
@@ -352,14 +353,22 @@ void sendEncodedData(char *data, uint8_t dataSize){
  */
 void UART5_Handler(void){
     //Local variables
-    unsigned char rx_data[10];       // Incoming buffer data
+    unsigned char i=0;
+    char ch = 'o';
+    char *ret;
+    char rx_rawData[16];          // Incoming buffer data
+    unsigned char rx_data[10];         //data
+    UART5_ICR_R &= ~(0x010);           // Clear receive interrupt
 
-    UART5_ICR_R &= ~(0x010);         // Clear receive interrupt
-
-    //Read UART5 buffer
-    for(char i=0; i<16; i++){
-        rx_data[i] = UART5_DR_R;
+    // Read until Rx buffer is empty
+    while((UART5_FR_R & (1<<4)) == 0){
+        rx_rawData[i] = UART5_DR_R;
+         i++;
     }
+
+    ret = memchr(rx_rawData, ch, 16);
+    memcpy(rx_data,ret+1,10);
+
 
      // Get reaction wheel mode
     if((rx_data[0])== 224){
@@ -385,8 +394,12 @@ void UART5_Handler(void){
         m_iDutyCycle[1] = ((uint16_t)rx_data[4] << 8) | rx_data[5];
 
     }else if((rx_data[0])== 239){
-        //Change to automatic Mode
+        // Change to automatic Mode
         m_cMode = 'A';
+        // Set setpoint
+        m_fEulerAngles[0]=0;
+        m_fEulerAngles[1]=0;
+        m_fEulerAngles[2]=0;
     }
 }
 
@@ -1163,13 +1176,17 @@ void SysTick_Handler(void){
 
     // GET MPU6050 DATA
    GetEulerAngles(m_fAcc, m_fGyro, m_fEulerAngles);
-   // Perform attitude controller and torque controller
-   attitudeControlLaw(m_fsetPoint, m_fEulerAngles, m_fEulerAngles_ant, m_feEulerI, m_ftorqueCommand);
-   torqueCalculation(m_itorque, m_uiRwRates, m_uiRwRatesAnt);
-   torqueController(m_itorque, m_ftorqueCommand, m_fRawcommand, m_fTorqueI);
 
-   // Send calculated PWM to Brushless Motors
-   sendRwCommands(m_iDutyCycle, m_bDirection, m_fRawcommand);
+   if(m_cMode == 'A'){
+       // Perform attitude controller and torque controller
+       attitudeControlLaw(m_fsetPoint, m_fEulerAngles, m_fEulerAngles_ant, m_feEulerI, m_ftorqueCommand);
+       torqueCalculation(m_itorque, m_uiRwRates, m_uiRwRatesAnt);
+       torqueController(m_itorque, m_ftorqueCommand, m_fRawcommand, m_fTorqueI);
+       // Send calculated PWM to Brushless Motors
+       sendRwCommands(m_iDutyCycle, m_bDirection, m_fRawcommand);
+   }else if (m_cMode == 'M'){
+       sendRwComOpenLoop(m_iDutyCycle, m_bDirection);
+   }
 
    // Enable timers and enable interruption flag
    TIMER0_CTL_R |= (1<<0)|(1<<8);   // Disable GPTM0A & GPTM0B
@@ -1316,6 +1333,35 @@ void sendRwCommands(uint16_t *dutyCycle, bool *sign,float *rawCommand){
        GPIO_PORTA_DATA_R |= (1<<4);
    else
        GPIO_PORTA_DATA_R &= ~(1<<4);
+}
+
+void sendRwComOpenLoop(uint16_t *dutyCycle, bool *sign){
+    // Saturate outputs
+    if(dutyCycle[0]>4999)
+       dutyCycle[0] = 4999;
+    if(dutyCycle[1]>4999)
+       dutyCycle[1] = 4999;
+    if(dutyCycle[2]>4999)
+       dutyCycle[2] = 4999;
+
+    // Send Speed Command
+    PWM1_3_CMPA_R = dutyCycle[0];
+    PWM1_3_CMPB_R = dutyCycle[1];
+    PWM1_2_CMPA_R = dutyCycle[2];
+
+    // Send Direction pin
+    if (sign[0])
+        GPIO_PORTA_DATA_R |= (1<<5);
+    else
+        GPIO_PORTA_DATA_R &= ~(1<<5);
+    if (sign[1])
+        GPIO_PORTA_DATA_R |= (1<<3);
+    else
+        GPIO_PORTA_DATA_R &= ~(1<<3);
+    if (sign[2])
+        GPIO_PORTA_DATA_R |= (1<<4);
+    else
+        GPIO_PORTA_DATA_R &= ~(1<<4);
 }
 
 void getRwAngularRates(bool *sign, unsigned int *rawRateRPM, float *rwRatesRadPerSecconds){
