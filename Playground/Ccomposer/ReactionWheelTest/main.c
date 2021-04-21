@@ -81,6 +81,7 @@ void Timer2A_Handler(void);
 
 // ADC Initialization
 void adcInitialization(void);
+void adcTimerTriggerInit(uint32_t period);
 
 //PWM Functions
 void enable_PWM(void);
@@ -154,27 +155,22 @@ float m_feEulerI[3];                       // Euler error integer
 //float m_fPrueb[3]={5.2,3.0,5.2};
 //--------------------MAIN PROGRAM---------------------
 int main(void){
-  I2c1_begin();             // Initialize I2C port
+  //initTimer1Aint();                   // Initialize Timer1 interruption
+  //adcInitialization();                // Initialize ADC to read currents
+  I2c1_begin();                         // Initialize I2C port
   Delay(1000);
-  Uart5_begin();            // Initialize UART port
+  Uart5_begin();                        // Initialize UART port
   Delay(1000);
-  MPU6050_Init();           // Initialize MPU6050
+  MPU6050_Init();                       // Initialize MPU6050
   Delay(1000);
-  initDirectionPins();      // Initialize CW/CCW Pines
-  enable_PWM();             // Enable PWM channels
-  countersCaptureInit();           // Initialize timers capture mode for encoders
-
-  //initTimer1Aint();         // Initialize Timer1 interruption
-  //adcInitialization();      // Initialize ADC to read currents
-  SysTickInit();              // Initialize Systick interrupt
+  initDirectionPins();                  // Initialize CW/CCW Pines
+  enable_PWM();                         // Enable PWM channels
+  countersCaptureInit();                // Initialize timers capture mode for encoders
+  adcTimerTriggerInit(5000000);         // Initialize ACD0 in timer trigger mode each 300ms
+  SysTickInit();                        // Initialize Systick interrupt
   while(1){
       if(m_bSent){
-          //m_cMesg[0] = 'i';
-          //memcpy(m_cMesg+ 1,m_fEulerAngles,sizeof(m_fEulerAngles));
-          //memcpy(m_cMesg+13,m_fAcc        ,sizeof(m_fAcc)        );
-          //memcpy(m_cMesg+25,m_fGyro       ,sizeof(m_fGyro)       );
-          //memcpy(m_cMesg+37,m_uiRwRates   ,sizeof(m_uiRwRates)   );
-          //sendEncodedData(m_cMesg,sizeof(m_cMesg));
+          // Send Data o PC in strings
           sprintf(m_cMesg, "i%.2f\t %.2f\t%.2f\n",
                   m_fEulerAngles[0], m_fEulerAngles[1], m_fEulerAngles[2]);
           UART5_printString(m_cMesg);
@@ -187,6 +183,11 @@ int main(void){
           sprintf(m_cMesg, "l%.2f\t %.2f\t%.2f\n",
                   m_uiRwRates[0], m_uiRwRates[1], m_uiRwRates[2]);
           UART5_printString(m_cMesg);
+          sprintf(m_cMesg, "m%d\t %d\t%d\n",
+                  m_iRw2Current, m_iRw3Current,m_iRw1Current);
+          UART5_printString(m_cMesg);
+
+          // Refresh flag
           m_bSent=false;
       }
   }
@@ -533,7 +534,6 @@ static int I2C_wait_till_done(void){
  */
 void Delay(unsigned long counter){
     unsigned long i = 0;
-
     for(i=0; i< counter*10000; i++);
 }
 
@@ -1021,6 +1021,67 @@ void adcInitialization(void){
     ADC0_PSSI_R |= (1<<2);                  // Enable SS2 conversion or start sampling data from AN0
 }
 
+//----------------------------ADC Functions-----------------------------------
+/* void adcTimerTriggerInit(uint32_t period)
+ * Description:
+ * This function initialize adc in sequence 2 to read current consumption of
+ * wheels rates.
+ * the pines and timers are distributed in the following array:
+ * PD3 (AIN4) ---> RW1 (Z axis)
+ * PE1 (AIN2) ---> RW2 (X axis)
+ * PE2 (AIN1) ---> RW3 (Y axis)
+ */
+void adcTimerTriggerInit(uint32_t period){
+    // Enable ADC0 and GPIO pins
+    SYSCTL_RCGCGPIO_R |= (1<<3);             // Enable Clock to GPIOD or PD3
+    while((SYSCTL_PRGPIO_R & (1<<3))==0);    // Wait until clock is initialized
+    SYSCTL_RCGCGPIO_R |= (1<<4);             // Enable Clock to GPIOE for PE1, PE2
+    while((SYSCTL_PRGPIO_R & (1<<4))==0);    // Wait until clock is initialized
+    SYSCTL_RCGCADC_R  |= (1<<0);             // Module ADC0 clock enable
+    while((SYSCTL_PRADC_R & (1<<0))==0);     // Wait until clock is initialized
+
+    // Initialize PD3 for AIN4 input
+    GPIO_PORTD_DIR_R &= ~(1<<3);            // Make PD3 input
+    GPIO_PORTD_AFSEL_R |= (1<<3);           // Enable alternate function
+    GPIO_PORTD_DEN_R &= ~(1<<3);            // Disable digital function
+    GPIO_PORTD_AMSEL_R |= (1<<3);           // Enable analog function
+
+    // Initialize PE1, PE2 for AIN1, AIN2 input
+    GPIO_PORTE_DIR_R &= ~((1<<1)|(1<<2));   // Make PE1, PE2 input
+    GPIO_PORTE_AFSEL_R |= (1<<1) | (1<<2);  // Enable alternate function
+    GPIO_PORTE_DEN_R &= ~((1<<1)|(1<<2));   // Disable digital function
+    GPIO_PORTE_AMSEL_R |= (1<<1) | (1<<2);  // Enable analog function
+
+    // Set ADC0
+    ADC0_PC_R = 0x01;                       // Configure for 125K samples/sec
+    ADC0_SSPRI_R = 0x3210;                  // Seq 0 is highest, Seq 3 is lowest
+
+    // Enable Timer3
+    SYSCTL_RCGCTIMER_R |= (1<<3);           // Enable timer3
+    while((SYSCTL_PRTIMER_R & (1<<3))==0);  // Wait until clock is initialized
+    // Timer3 configurations
+    TIMER3_CTL_R &= ~(1<<0);                // Disable timer3A during setup
+    TIMER3_CTL_R |= (1<<5);                 // Enable timer3A trigger to ADC
+    TIMER3_CFG_R = 0;                       // Configure for 32-bit timer mode
+    TIMER3_TAMR_R = 0x00000002;             // Configure for periodic mode
+    TIMER3_TAPR_R = 0;                      // Prescale value for trigger
+    TIMER3_TAILR_R = period-1;              // Start value for trigger
+    TIMER3_IMR_R = 0x00000000;              // Disable all interrupts
+    TIMER3_CTL_R |= (1<<0);                 // Enable timer3A 32-b, periodic
+
+    // Initialize sample sequencer2
+    ADC0_ACTSS_R &= ~(1<<2);                        // Disable sample sequencer 2
+    ADC0_EMUX_R = (ADC0_EMUX_R&0xFFFFF0FF)+0x0500;  // Enable timer trigger
+    ADC0_SSMUX2_R = 0X000214;                       // Get input from channel 1,2, and 4
+    ADC0_SSCTL2_R |= (1<<9)|(1<<10);                // Take three samples at a time, set flag at 3rd sample
+
+    // Enable ADC Interrupt
+    ADC0_IM_R |= (1<<2);            // Enable SS2 interrupts
+    NVIC_EN0_R |= (1<<16);          // Enable IRQ17 for ADC0SS2
+    ADC0_ACTSS_R |= (1<<2);         // Enable ADC0 sequencer 2
+    //NVIC_PRI4_R = (NVIC_PRI4_R&0xFFFF00FF)|0x00004000; // 11)priority 2
+}
+
 void ADC0SS2_Handler(void){
     //Local variables
     uint32_t xRaw, yRaw, zRaw;      //Variables to store raw data
@@ -1070,9 +1131,9 @@ void SysTick_Handler(void){
     unsigned int RwRate[3];
 
     // Get measured reaction wheels rates
-    RwRate[0]=timerA0Capture();
-    RwRate[1]=timerB0Capture();
-    RwRate[2]=timerA2Capture();
+    RwRate[0]=timerA0Capture()*33.333;
+    RwRate[1]=timerB0Capture()*33.333;
+    RwRate[2]=timerA2Capture()*33.333;
 
     // Reset counters
     TIMER0_CTL_R &= ~((1<<0)|(1<<8));   // Disable GPTM0A & GPTM0B
