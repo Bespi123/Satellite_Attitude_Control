@@ -103,7 +103,7 @@ void Delay(unsigned long counter);
 //char m_cMesg[100];              // Buffer to send
 char m_cMesg[49];              // Buffer to send
 unsigned char m_cMode = 'A';    // Mode variable
-char m_fPrueba[] = {'A','B','C','D','E','F','G','H','I','J','K','L','M','N','O','P','Q','R','S','T','U','W','X','Y','Z'};   //Prueba
+//char m_fPrueba[] = {'A','B','C','D','E','F','G','H','I','J','K','L','M','N','O','P','Q','R','S','T','U','W','X','Y','Z'};   //Prueba
 bool m_bSent = false;           // Flag to send data
 
 //----------------------RW Controller Variables---------------------
@@ -169,19 +169,25 @@ int main(void){
   SysTickInit();              // Initialize Systick interrupt
   while(1){
       if(m_bSent){
-          //sprintf(m_cMesg, "%.2f, %.2f, %.2f \n", m_fEulerAngles[0]*180/PI, m_fEulerAngles[1]*180/PI, m_fEulerAngles[2]*180/PI);
-          m_cMesg[0] = 'i';
-          //memcpy(m_cMesg+ 1,m_fPrueba,sizeof(m_fPrueba));
-          //memcpy(m_cMesg+13,m_fPrueba,sizeof(m_fPrueba));
-          //memcpy(m_cMesg+25,m_fPrueba,sizeof(m_fPrueba));
-          //memcpy(m_cMesg+37,m_fPrueba,sizeof(m_fPrueba));
-          memcpy(m_cMesg+ 1,m_fEulerAngles,sizeof(m_fEulerAngles));
-          memcpy(m_cMesg+13,m_fAcc        ,sizeof(m_fAcc)        );
-          memcpy(m_cMesg+25,m_fGyro       ,sizeof(m_fGyro)       );
-          memcpy(m_cMesg+37,m_uiRwRates   ,sizeof(m_uiRwRates)   );
-          //UART5_sendBuffer(m_cMesg, 50);
-          //UART5_printString(m_cMesg);
-          sendEncodedData(m_cMesg,sizeof(m_cMesg));
+          //m_cMesg[0] = 'i';
+          //memcpy(m_cMesg+ 1,m_fEulerAngles,sizeof(m_fEulerAngles));
+          //memcpy(m_cMesg+13,m_fAcc        ,sizeof(m_fAcc)        );
+          //memcpy(m_cMesg+25,m_fGyro       ,sizeof(m_fGyro)       );
+          //memcpy(m_cMesg+37,m_uiRwRates   ,sizeof(m_uiRwRates)   );
+
+                    //sendEncodedData(m_cMesg,sizeof(m_cMesg));
+          sprintf(m_cMesg, "i%.2f\t %.2f\t%.2f\n",
+                  m_fEulerAngles[0], m_fEulerAngles[1], m_fEulerAngles[2]);
+          UART5_printString(m_cMesg);
+          sprintf(m_cMesg, "j%.2f\t %.2f\t%.2f\n",
+                  m_fAcc[0], m_fAcc[1], m_fAcc[2]);
+          UART5_printString(m_cMesg);
+          sprintf(m_cMesg, "k%.2f\t %.2f\t%.2f\n",
+                  m_fGyro[0], m_fGyro[1], m_fGyro[2]);
+          UART5_printString(m_cMesg);
+          sprintf(m_cMesg, "l%.2f\t %.2f\t%.2f\n",
+                  m_uiRwRates[0], m_uiRwRates[1], m_uiRwRates[2]);
+          UART5_printString(m_cMesg);
           m_bSent=false;
       }
   }
@@ -303,7 +309,6 @@ void UART5_printString(char *str){
 void UART5_sendBuffer(char *data, uint8_t bufferSize){
     for(char i=0; i< bufferSize; i++){
         UART5_DR_R = data[i];
-        Delay(1);
     }
 }
 
