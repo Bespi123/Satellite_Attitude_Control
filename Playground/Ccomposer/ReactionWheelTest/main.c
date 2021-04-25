@@ -353,20 +353,21 @@ void sendEncodedData(char *data, uint8_t dataSize){
  */
 void UART5_Handler(void){
     //Local variables
-    unsigned char i=0;
-    char ch = 'o';
+    unsigned char i = 0;
+    char begingChar = 'o';
+    char endChar    = 'p';
     char *ret;
     char rx_rawData[16];          // Incoming buffer data
     unsigned char rx_data[10];         //data
     UART5_ICR_R &= ~(0x010);           // Clear receive interrupt
-
+    Delay(1);
     // Read until Rx buffer is empty
     while((UART5_FR_R & (1<<4)) == 0){
         rx_rawData[i] = UART5_DR_R;
          i++;
     }
 
-    ret = memchr(rx_rawData, ch, 16);
+    ret = memchr(rx_rawData, begingChar, 16);
     memcpy(rx_data,ret+1,10);
 
 
