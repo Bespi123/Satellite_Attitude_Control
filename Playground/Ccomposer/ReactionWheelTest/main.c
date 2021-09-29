@@ -14,14 +14,16 @@
 #include <string.h>
 #include <stdio.h>
 #include <math.h>
-#include "sensorlib/quaternion.h"
-#include "sensorlib/quaternion.c"
-#include "sensorlib/vector.h"
+#include "PLL.h"
+//#include "sensorlib/quaternion.h"
+//#include "sensorlib/quaternion.c"
+//#include "sensorlib/vector.h"
 #include "inc/tm4c123gh6pm.h"
 
 //-------------------------Program Definitions------------------------
 //  MPU 6050 DEFINITIONS
 #define MPU_6050_ADDR           0x68    //MPU 6050 ADDRESS
+
 
 // MPU 6050 REGISTERS
 #define  Reg_PWR_MGMT_1         0x6B    // Power management 1
@@ -158,6 +160,7 @@ float m_feEulerI[3];                       // Euler error integer
 int main(void){
   //initTimer1Aint();                   // Initialize Timer1 interruption
   //adcInitialization();                // Initialize ADC to read currents
+  PLL_Init();                           // Set Clock frecuency to 80MHz
   I2c1_begin();                         // Initialize I2C port
   Delay(1000);
   Uart5_begin();                        // Initialize UART port
@@ -167,7 +170,7 @@ int main(void){
   initDirectionPins();                  // Initialize CW/CCW Pines
   enable_PWM();                         // Enable PWM channels
   countersCaptureInit();                // Initialize timers capture mode for encoders
-  adcTimerTriggerInit(5000000);         // Initialize ACD0 in timer trigger mode each 300ms
+  adcTimerTriggerInit(25000000);       // Initialize ACD0 in timer trigger mode each 300ms
   SysTickInit();                        // Initialize Systick interrupt
   while(1){
       if(m_bSent){
@@ -257,8 +260,15 @@ void Uart5_begin(void){
 
     // UART5 initialization
     UART5_CTL_R &= ~0x01;                               // Disable UART5
-    UART5_IBRD_R = (UART5_IBRD_R & ~0XFFFF)+104;        // for 9600 baud rate, integer = 104
-    UART5_FBRD_R = (UART5_FBRD_R & ~0X3F)+11;           // for 9600 baud rate, fractional = 11
+    /* 9600 =  (16MHz / 16 x baud divisor)
+    Baud divisor = 1000000/9600 = 104.1667
+    The integer value of the baud divisor will go into the integer baud register UARTIBRD.
+    IBRD = 104; 16MHz/16=1MHz, 1MHz/104=9600 baud rate
+    Value for the fractional baud rate register can be calculated by multiplying fraction value with 64 and adding 0.5.
+    FBRD = 0.166 x 64 + 0.5 = 11*/
+
+    UART5_IBRD_R = (UART5_IBRD_R & ~0XFFFF)+520;        // for 9600 baud rate, integer = 520
+    UART5_FBRD_R = (UART5_FBRD_R & ~0X3F)+53;           // for 9600 baud rate, fractional = 53
 
     UART5_CC_R = 0x00;                                  // Select system clock (based on clock source and divisor factor)
     UART5_LCRH_R = (UART5_LCRH_R & ~0XFF)| 0x70;        // Data length 8-bit, not parity bit, FIFO enable
@@ -289,7 +299,7 @@ void Uart5_begin(void){
  * This function sends a char throught UART5.
  */
 void UART5_Transmitter(unsigned char data){
-    while((UART5_FR_R & (1<<5)) != 0);      // Wait until Tx buffer is not full
++    while((UART5_FR_R & (1<<5)) != 0);      // Wait until Tx buffer is not full
     UART5_DR_R = data;                      // Before giving it another byte
 }
 
@@ -355,12 +365,12 @@ void UART5_Handler(void){
     //Local variables
     unsigned char i = 0;
     char begingChar = 'o';
-    char endChar    = 'p';
+    //char endChar    = 'p';
     char *ret;
     char rx_rawData[16];          // Incoming buffer data
     unsigned char rx_data[10];         //data
     UART5_ICR_R &= ~(0x010);           // Clear receive interrupt
-    Delay(1);
+    Delay(2);
     // Read until Rx buffer is empty
     while((UART5_FR_R & (1<<4)) == 0){
         rx_rawData[i] = UART5_DR_R;
@@ -374,7 +384,7 @@ void UART5_Handler(void){
      // Get reaction wheel mode
     if((rx_data[0])== 224){
         //Change to manual mode
-        m_cMode = 'M';
+        m_cMode = 'A';
         //RW1, RW2, RM3 directions
         if(rx_data[3]==16)
             m_bDirection[0] = true;
@@ -408,7 +418,7 @@ void UART5_Handler(void){
 /* void I2c1_begin(void)
  *
  * Description:
- * This function initialize the I2C1 Port in 100kHz.
+ * This function initialize the I2C1 Port in 100kbps.
  *
  */
 void I2c1_begin(void){
@@ -425,10 +435,12 @@ void I2c1_begin(void){
     I2C1_MCR_R = 0x0010;                    // Enable I2C 1 master function
 
     /* Configure I2C 1 clock frequency
-    (1 + TIME_PERIOD ) = SYS_CLK /(2*
-    ( SCL_LP + SCL_HP ) * I2C_CLK_Freq )
-    TIME_PERIOD = 16 ,000 ,000/(2(6+4) *100000) - 1 = 7 */
-    I2C1_MTPR_R = 0x07;
+    (1 + TIME_PERIOD ) = SYS_CLK /(2*( SCL_LP + SCL_HP ) * I2C_CLK_Freq )
+    TIME_PERIOD = 16 ,000 ,000/(2(6+4) *100000) - 1 = 7
+    TIME_PERIOD = 80 ,000 ,000/(2(6+4) *100000) - 1 = 39 */
+    //I2C1_MTPR_R = 0x07;
+    I2C1_MTPR_R = 24;
+    // 20*(TPR+1)*20ns = 10us, with TPR=24
 }
 
 /* char I2C1_writeByte( @slaveAddr, @memAddr, @data)
@@ -586,17 +598,17 @@ void enable_PWM(void){
     PWM1_3_CTL_R &= ~(1<<1);            // Select down count mode of counter 3
     PWM1_3_GENA_R = 0x0000008C;         // Set PWM output when counter reloaded and clear when matches PWMCMPA
     PWM1_3_GENB_R = 0x0000080C;         // Set PWM output when counter reloaded and clear when matches PWMCMPB
-    PWM1_3_LOAD_R = 5000;               // Set load value for 50Hz (16MHz/65 = 250kHz/5000 = 50Hz).
-    PWM1_3_CMPA_R = 4999;               // Set duty cycle to to minimum value
-    PWM1_3_CMPB_R = 200;                // Set duty cycle to to minimum value
+    PWM1_3_LOAD_R = 25000;               // Set load value for 50Hz (80MHz/65 = 250kHz/5000 = 50Hz).
+    PWM1_3_CMPA_R = 14999;               // Set duty cycle to to minimum value
+    PWM1_3_CMPB_R = 14999;                // Set duty cycle to to minimum value
     PWM1_3_CTL_R = 1;                   // Enable Generator 3 counter
 
     // Enable PWM Generator2 A
     PWM1_2_CTL_R &= ~(1<<0);            // Disable Generator 2 counter
     PWM1_2_CTL_R &= ~(1<<1);            // Select down count mode of counter 2
     PWM1_2_GENA_R = 0x0000008C;         // Set PWM output when counter reloaded and clear when matches PWMCMPA
-    PWM1_2_LOAD_R = 5000;               // Set load value for 50Hz (16MHz/65 = 250kHz/5000 = 50Hz).
-    PWM1_2_CMPA_R = 4999;               // Set duty cycle to to minimum value
+    PWM1_2_LOAD_R = 25000;               // Set load value for 50Hz (16MHz/65 = 250kHz/5000 = 50Hz).
+    PWM1_2_CMPA_R = 14999;               // Set duty cycle to to minimum value
     PWM1_2_CTL_R = 1;                   // Enable Generator 3 counter
 
     // Enable PWM channels
@@ -1134,8 +1146,8 @@ void ADC0SS2_Handler(void){
 //-------------------------------SysTick functions--------------------------------
 void SysTickInit(void){
     //NVIC_ST_RELOAD_R = 15999999;   // One second delay 1s relaod value
-    NVIC_ST_RELOAD_R = 1599999;   // One second delay 0.1s relaod value
-    //NVIC_ST_RELOAD_R = 19999;   // One second delay 1ms relaod value
+    NVIC_ST_RELOAD_R = 799999;   // One second delay 0.01s relaod value
+    //NVIC_ST_RELOAD_R = 79999;   // One second delay 1ms relaod value
     NVIC_ST_CTRL_R = 0x07;      // Enable counter, interrupt and select system bus clock
     NVIC_ST_CURRENT_R = 0;      // Initialize current value register
 }
@@ -1177,7 +1189,7 @@ void SysTick_Handler(void){
 
     // GET MPU6050 DATA
    GetEulerAngles(m_fAcc, m_fGyro, m_fEulerAngles);
-
+/*
    if(m_cMode == 'A'){
        // Perform attitude controller and torque controller
        attitudeControlLaw(m_fsetPoint, m_fEulerAngles, m_fEulerAngles_ant, m_feEulerI, m_ftorqueCommand);
@@ -1188,6 +1200,10 @@ void SysTick_Handler(void){
    }else if (m_cMode == 'M'){
        sendRwComOpenLoop(m_iDutyCycle, m_bDirection);
    }
+*/
+   PWM1_3_CMPA_R = 0;
+   PWM1_3_CMPB_R = 5000;
+   PWM1_2_CMPA_R = 14999;
 
    // Enable timers and enable interruption flag
    TIMER0_CTL_R |= (1<<0)|(1<<8);   // Disable GPTM0A & GPTM0B
