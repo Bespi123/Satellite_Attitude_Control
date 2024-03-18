@@ -119,7 +119,7 @@ end
 % LS2125204: plot beihang logo 
 axes(handles.logo);
 %matlabImage = imread('logo.png');
-matlabImage = imread('unsa.jpeg');
+matlabImage = imread('adcs.jpg');
 image(matlabImage)
 axis off
 axis image
