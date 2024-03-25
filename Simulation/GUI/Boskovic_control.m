@@ -15,8 +15,8 @@ we=w-R*wd;
 %Sliding surface
 S=we+k^2*dq13;
 %Señal de control
+U = zeros(3,1);
     for i=1:3
         U(i)=-Umax*S(i)/(abs(S(i))+k^2*delta);
     end
-    U=U';
 end
