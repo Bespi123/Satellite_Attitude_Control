@@ -73,5 +73,6 @@ eulerInt = cumtrapz(t,eulerang);
 ascct_dot=vecnorm(u,2,1).^2;
 ascct = cumtrapz(t,ascct_dot); 
 %%%Settlement time calculation
-ts = 0;
+tol = 5/100; % 2%
+ts = calculateSettlementTime(180/pi*quat2eul(dq'), t, tol) ;
 end
