@@ -1,5 +1,5 @@
 %function [dx,y] = BrushelessModel(t,x,u,kt,J,B,Kc,L,R,Ke,d,ws,varargin)
-function [dx,y] = BrushelessModel(t,x,u,kt,J,B,L,R,Ke,varargin)
+function [dx,y] = BrushelessModel(t,x,u,kt,J,B,Kc,L,R,Ke,varargin)
     %Define inputs
     %u:     Vpwm (Vmean)
     %kt:    Torque constant (N*m/A)
@@ -25,15 +25,21 @@ function [dx,y] = BrushelessModel(t,x,u,kt,J,B,L,R,Ke,varargin)
 
     %Perform ecuations
     %w_dot=1/J*(kt*i-B*w-sign(w)*(Kc+d*exp(w^2/ws)));
-    
-    w_dot=1/J*(kt*i-B*w);
-    i_dot=1/L*(u-R*i-Ke/J*w);
+    % if(isnan(x(1))||isnan(x(2)))
+    %     dx=[NaN,NaN]';
+    %     y = [NaN,NaN]';
+    %     return;
+    % end
+
+    %w_dot=1/J*(kt*i-B*w);
+    w_dot=1/J*(kt*i-B*w-Kc*sign(w));
+    i_dot=1/L*(u-R*i-Ke*w);
     
     %x_dot vector
     dx=[w_dot,i_dot]';
     
     %Output equation (Angular rate)
     y=[x(1);
-        x(2)
+       x(2)
         ];
 end
