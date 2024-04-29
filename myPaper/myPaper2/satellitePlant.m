@@ -25,9 +25,10 @@ Xi=[-q(2),-q(3),-q(4);
      q(1),-q(4),q(3);
      q(4),q(1),-q(2);
     -q(3),q(2),q(1)]; 
-x1_dot=1/2*Xi*w;                                   %Ecuacion cinematica (3.21)
+x1_dot=1/2*Xi*w;                                %Ecuacion cinematica (3.21)
 x2_dot=J\(Td-U-cross(w,J*w+Jrw*(w+Wrw)));      %Ecuación dinámica (3.147)
-x3_dot=Jrw\(U-b*Wrw+c*sign(Wrw));                   %Ecuación de Ruedas de reacción (Rw)
+x3_dot=Jrw\(U-b*Wrw+c*sign(Wrw));               %Ecuación de Ruedas de reacción (Rw)
+%x2_dot=J\(Td+Jrw*x3_dot-cross(w,J*w+Jrw*(w+Wrw)));       %Ecuación dinámica (3.147)
 %-----------------Vector x_dot---------------------------------------------
 x_dot=[x1_dot;x2_dot;x3_dot];
 end
