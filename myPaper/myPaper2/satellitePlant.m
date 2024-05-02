@@ -12,6 +12,10 @@ J   = [entr(10),entr(13),entr(14); %Matriz de inercias del rigid body
 q=[entr(16),entr(17),entr(18),entr(19)]'; %Quaternions
 w=[entr(20),entr(21),entr(22)]';     %Velocidades angulares del cuerpo [wx,wy,wz]
 Wrw=[entr(23),entr(24),entr(25)]';   %Velocidades angulares de ruedas de reacción
+
+%%%Saturate Wrw =
+%Wrw = mySaturate(Wrw,457.6253298729);
+
 %------------------------Ecuaciones cinematica y dinamica------------------
 %Libro: Fundamentals of Spacecraft Attitude Determination and Control
 %Autor: F. Landis Markley & John L. Crassidis
@@ -28,7 +32,8 @@ Xi=[-q(2),-q(3),-q(4);
 x1_dot=1/2*Xi*w;                                %Ecuacion cinematica (3.21)
 %x2_dot=J\(Td-U-cross(w,J*w+Jrw*(w+Wrw)));      %Ecuación dinámica (3.147)
 x3_dot=Jrw\(U-b*Wrw+c*sign(Wrw));               %Ecuación de Ruedas de reacción (Rw)
-x2_dot=J\(Td-Jrw*x3_dot-cross(w,J*w+Jrw*(w+Wrw)));       %Ecuación dinámica (3.147)
+%x2_dot=J\(Td-Jrw*x3_dot-cross(w,J*w+Jrw*(w+Wrw)));       %Ecuación dinámica (3.147)
+x2_dot=J\(Td-U-cross(w,J*w+Jrw*(w+Wrw)));       %Ecuación dinámica (3.147)
 %-----------------Vector x_dot---------------------------------------------
 x_dot=[x1_dot;x2_dot;x3_dot];
 end
