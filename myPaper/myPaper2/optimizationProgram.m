@@ -10,7 +10,7 @@ parameters        = [];
 
 %GA OPTIONS
 %try
-ga_opt = gaoptimset('Display','off','Generations',100,'PopulationSize',50, ...
+ga_opt = gaoptimset('Display','off','Generations',10,'PopulationSize',100, ...
     'InitialPopulation',initial,'PlotFcns',@gaplotbestf);
 obj_fun = @(k)myObjectiveFunction(k);
 

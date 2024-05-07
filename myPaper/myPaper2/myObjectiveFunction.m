@@ -28,7 +28,7 @@ init.q    = [1,0,0,0];
 init.w    = [0,0,0];
 init.W_rw = [0,0,0];
 
-setPoint.angd = 360*rand(3,1)-180;
+setPoint.angd = 40*rand(3,1)-20;
 setPoint.wd   = [0,0,0]';
 
 initialConditions = [initialConditions,setPoint.angd];
