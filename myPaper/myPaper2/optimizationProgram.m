@@ -1,7 +1,7 @@
-no_var = 3;  %number of variables
-lb = [0 0 0]; % lower bound
-up = [Inf Inf Inf]; % high bound
-initial = [1 1 1];
+no_var = 6;  %number of variables
+lb = [0 0 0 0 0 0]; % lower bound
+up = [Inf Inf Inf Inf Inf Inf]; % high bound
+initial = [1 1 1 1 1 1];
 
 %GA OPTIONS
 %try

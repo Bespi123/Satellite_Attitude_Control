@@ -9,9 +9,9 @@ J   = [entr(10),entr(13),entr(14); %Matriz de inercias del rigid body
        entr(13),entr(11),entr(15);
        entr(14),entr(15),entr(12)];
 %-------------------------Vectores de estado-------------------------------
-q=[entr(16),entr(17),entr(18),entr(19)]'; %Quaternions
-w=[entr(20),entr(21),entr(22)]';     %Velocidades angulares del cuerpo [wx,wy,wz]
-Wrw=[entr(23),entr(24),entr(25)]';   %Velocidades angulares de ruedas de reacción
+q   = [entr(16),entr(17),entr(18),entr(19)]'; %Quaternions
+w   = [entr(20),entr(21),entr(22)]';     %Velocidades angulares del cuerpo [wx,wy,wz]
+Wrw = [entr(23),entr(24),entr(25)]';   %Velocidades angulares de ruedas de reacción
 
 %%%Saturate Wrw =
 %Wrw = mySaturate(Wrw,457.6253298729);

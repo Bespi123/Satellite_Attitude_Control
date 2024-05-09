@@ -11,9 +11,8 @@ function J=myObjectiveFunction(k)
 % Separate the variables into their appropriate names, according to the
 % problem at hand. These variables correspond to the elements of x, which
 % must be n different elements.
-pid.kp = k(1); 
-pid.ki = k(2);
-pid.kd = k(3);
+feedback.P = [k(1) k(2) k(3)];    
+feedback.K = [k(4) k(5) k(6)];
 
 %%%%%%%%%%%%%%%%%%%     SECTION 2: Conditions         %%%%%%%%%%%%%%%%%%%%%
 % Operating conditions of the problem. If the problem has parameters or 
@@ -28,7 +27,7 @@ init.q    = [1,0,0,0];
 init.w    = [0,0,0];
 init.W_rw = [0,0,0];
 
-setPoint.angd = 360*rand(3,1)-180;
+setPoint.angd = 40*rand(3,1)-20;
 setPoint.wd   = [0,0,0]';
 
 initialConditions = [initialConditions,setPoint.angd];
