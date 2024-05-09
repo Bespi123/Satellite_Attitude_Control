@@ -6,7 +6,6 @@ function J=myObjectiveFunction(k)
 % course - UNEXPO - 2023 - jrequez@unexpo.edu.ve
 % Modified by Bespi123 on 26/02/2024
 
-
 %%%%%%%%%%%%%%%%%%%     SECTION 1: Variables          %%%%%%%%%%%%%%%%%%%%%
 % Separate the variables into their appropriate names, according to the
 % problem at hand. These variables correspond to the elements of x, which
@@ -18,20 +17,20 @@ pid.kd = k(3);
 %%%%%%%%%%%%%%%%%%%     SECTION 2: Conditions         %%%%%%%%%%%%%%%%%%%%%
 % Operating conditions of the problem. If the problem has parameters or 
 % data that you need to add, place them in this section.
-motor.Jrw = 2.55e-05;
-motor.b   = 1.00023e-05;
-motor.c   = 0.000435786;
+%%%x-coil
+%%Nominal motor values (estimated from real Data)
+motor.kt = 0.000872234;  %kt 
+motor.Jrw  = 2.55E-05;   %J
+motor.b  = 1.00023E-05;  %B
+motor.c = 0.000435786;   %kc
+motor.L  = 0.000176564;  %H  
+motor.R  = 1.23424;      %R    
+motor.ke = 0.00966471;   %ke
 
-sat.J     = [3.084,3.132,3.540,0.082,-0.054,0.016];
+%%Initial conditions
+init.w_rw = 0;
+init.current = 0; 
 
-init.q    = [1,0,0,0];
-init.w    = [0,0,0];
-init.W_rw = [0,0,0];
-
-setPoint.angd = 360*rand(3,1)-180;
-setPoint.wd   = [0,0,0]';
-
-initialConditions = [initialConditions,setPoint.angd];
 %%%%%%%%%%%%%%%%%%%     SECTION 3: Pre-Calculations   %%%%%%%%%%%%%%%%%%%%%
 % Pre-calculations
 % If the problem requires performing pre-calculations to facilitate the
@@ -42,7 +41,9 @@ initialConditions = [initialConditions,setPoint.angd];
 % simulation outputs
 % WARNING!!! The model name must be changed in the following line
 try
-   salidas=sim('closeLoopSimulation','SrcWorkspace','current');
+   %salidas=sim('xcoilSintonization','SrcWorkspace','current');
+   %salidas=sim('ycoilSintonization','SrcWorkspace','current');
+   salidas=sim('closeLoop','SrcWorkspace','current');
    stable = 1;
 catch exception
    
@@ -50,8 +51,8 @@ catch exception
     stable = 0;
     disp('System No stable')
    else
-       disp('Otro error')
        stable = 0;
+       disp('Otro error')
    end
 end
 
@@ -63,8 +64,8 @@ t    = salidas.get('tout');
 
 % It is common to have the system error as out1, the controller output u as
 % out2, and the output y as out3
-q=yout(:,1:4); w=yout(:,5:7); Wrw=yout(:,8:10);%Define error, control signal and output
-dw = yout(:,11:13); dq=yout(:,14:17); u=yout(:,18:20);
+u=yout(:,1); y=yout(:,2); e=yout(:,4);%Define error, control signal and output
+
 %%%%%%%%%%%%%%%%%%% SECTION 5: Calculate the Fitness  %%%%%%%%%%%%%%%%%%%%%%
 % The response of the process is now analyzed. If the input is not a step, 
 % other variables or representative calculations must be chosen in this
@@ -72,46 +73,42 @@ dw = yout(:,11:13); dq=yout(:,14:17); u=yout(:,18:20);
 
 %-----Indice preestablecido------------
 %digamos que se desea que el tiempo de establecimiento sea un valor
-%especÃ­fico
+%específico
+%desired_setlement_time = 376;
+%desired_rising_time    = 80;
+desired_setlement_time = 0;
+desired_rising_time    = 0;
 
-%%%EULERINT calculation
-ang_and_axis = quat2axang(dq); 
-eulerang = ang_and_axis(:,4);
-eulerInt = cumtrapz(t,eulerang); 
-EULERINT = eulerInt(end);
+% calculate rising time
+tr = calculateRissingTime(e, t, 50/100);
+d_tr = abs(desired_rising_time-tr);
 
-%%%ASCCT Calculation
-ascct_dot=vecnorm(u,2,2).^2;
-ascct = cumtrapz(t,ascct_dot); 
-ASCCT = ascct(end);
+% Calculate settlement time
+ts = calculateSettlementTime(e, t, 5/100);
+d_ts = abs(desired_setlement_time-ts);
 
-%%%Settlement time calculation
-tol = 5/100; % 2%
-ts = calculateSettlementTime(180/pi*quat2eul(dq), t, tol);
+%-----índices de error integral --------
+%itse=trapz(t,t.*e.^2);
+itse = trapz(t,e.^2);
 
-%eulerAngs=180/pi*quat2eul(q);
-entropy1 = calculate_entropy(q(:,1));
-entropy2 = calculate_entropy(q(:,2));
-entropy3 = calculate_entropy(q(:,3));
-entropy4 = calculate_entropy(q(:,4));
-entropy  = entropy1+entropy2+entropy3+entropy4;
+itsy = trapz(t,y.^2);
 
+entropy = calculate_entropy(y);
 % % %-----
-
 %overshoot = max(y);
-[overshoot] = calculateOvershoot(q,eul2quat(pi/180*setPoint.angd'));
-arr = [EULERINT;ASCCT;ts;entropy;sum(overshoot)];
-parameters = [parameters,arr];
+[overshoot, ~] = calculateOvershoot(y);
 
-%%%-----ElecciÃ³n del Ã­ndice deseado como fitness-------
-%%% Se determina la salida del la funciÃ³n fitness
+uwork = trapz(t,u.^2);
+
+%%%-----Elección del índice deseado como fitness-------
+%%% Se determina la salida del la función fitness
 %%%J=itse+overshoot+umax+uwork+timeWorking;
 %%%J=itse+setlement_time_error+overshoot+rising_time_error;
 %%%J=itse+setlement_time_error+rising_time_error;
-if  isempty(ts)
+if isempty(tr) || isempty(ts)
     J = 5E4;
 else
-    J = EULERINT+ASCCT+ts+entropy+sum(overshoot);
+    J = d_tr+d_ts+itse+uwork+itsy+entropy+overshoot*100; %%%High value of J
 end
 else
     J = 5E4;
