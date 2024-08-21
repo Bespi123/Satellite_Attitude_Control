@@ -51,11 +51,12 @@ for i = 1:length(t)
     %     break;
     % end
 end
-
+figure(2)
+plot(t,x(:,1:end-1));
 %%%Compute Residual Errors
 %disp(['J: ',num2str(sum(vecnorm(w-x(:,1:end-1),2,1).^2))]);
 %disp(['A: ',num2str(length(t)*norm(A))]);
-J = sum(vecnorm(w-x(:,1:end-1),2,1).^2)+length(t)*norm(A);
+J = sum(vecnorm(w-x(:,1:end-1),2,1).^2);
     if isnan(J) 
         J = Inf;
     end

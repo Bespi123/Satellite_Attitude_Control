@@ -1,4 +1,4 @@
-%%%Nominal motor values
+%%% Nominal motor values
 init.J_11 = 3.084E-3;
 init.J_22 = 3.132E-3;
 init.J_33 = 3.540E-3;
@@ -13,86 +13,111 @@ init.alpha = 0;
 init.miss_x = 0; 
 init.miss_y = 0;
 init.miss_z = 0;
-
 initial = cell2mat(struct2cell(init));
 
-%%%1. Read data measured from the experiment
-% Especifica la ruta del archivo CSV
-filename = 'FeedbackControl.csv'; %%%Free movement
-% Especificar tiempo de muestreo
+%%% Misaligment between the sensor and body frame
+q_sensor = [0,0,1,0]';  %%% a rotation of 180deg in y axis  
+
+%% 1. Read data measured from the experiment
+%%% Especifica la ruta del archivo CSV
+filename = 'FeedbackControl.csv'; %%%Test with feedback controller
+%%% Especificar tiempo de muestreo
 dt = 1E-3;
-% Leer el archivo CSV y almacenar los datos en una tabla
+%%% Leer el archivo CSV y almacenar los datos en una tabla
 data = readtable(filename);
 
-% Mostrar las primeras filas de la tabla
+%%% Mostrar las primeras filas de la tabla
 disp(data(1:5, :));
 
-%%%Time vector 
+%%% Time vector 
 measured.t = data.t; 
 
-%%%Measured data respect to body frame
-q = angle2quat(deg2rad(data.Yaw),deg2rad(data.Pitch),deg2rad(data.Roll),'ZXY');
-%%%Get x matrix
-measured.x = [q, data.Ang_vel_x, data.Ang_vel_y, data.Ang_vel_z]';
-%%%Uniform the sample time
-[t_uniform, x_uniform] = setSampleTime(measured.t,measured.x',dt);
-%%%Measured data respect to body frame
-q_meas = measured.x(1:4,:); %%Assuming quaternions measurement errors is low
-w_meas_body = measured.x(5:7,:); %%Angular rate in body frame
+%%% Measured data respect to sensor frame
+q_sensorFrame = angle2quat(deg2rad(data.Yaw),deg2rad(data.Pitch),deg2rad(data.Roll),'ZXY');
+w_sensorFrame =  [data.Ang_vel_x, data.Ang_vel_y, data.Ang_vel_z]';
+%%% Measurements data respect to body frame
+q_bodyFrame = quatmultiply(repmat(q_sensor',length(q_sensorFrame),1),q_sensorFrame);
+w_bodyFrame = zeros(3,length(w_sensorFrame));
+for i = 1:length(w_bodyFrame)
+    w_bodyFrame(:,i) = quatRotation(q_sensor,w_sensorFrame(:,i));
+end
+%%% Measured data respect to inertial Frame
+w_inertialFrame = zeros(3,length(w_sensorFrame));
+for i = 1:length(w_inertialFrame)
+    w_inertialFrame(:,i) = quatRotation(q_bodyFrame(i,:),w_sensorFrame(:,i));
+end
 
-%%%Measured torque delivered
-[~, u_uniform] = setSampleTime(measured.t,[zeros(length(data.u_z_),2),data.u_z_],dt);
+%%% Get x matrix respect to sensor frame
+measured.x = w_inertialFrame;
+
+%%% Uniform the sample time
+[t_uniform, x_uniform] = setSampleTime(measured.t,measured.x',dt);
+[~, q_uniform] = setSampleTime(measured.t,q_bodyFrame,dt);
+q_in = q_uniform(450:end,:);
+t_in = 0:dt:dt*(length(q_in)-1);
+
+%%% Measured torque delivered
+%%% Integrate data to get reaction wheel
+Wz = trapz(t_in, data.u_z_(450:end,:));
+u_sensorFrame = [zeros(length(data.u_z_),2),data.u_z_];
+
+
+
+
+%%% Measured data respect to inertial Frame
+u_inertialFrame = zeros(3,length(u_sensorFrame));
+for i = 1:length(u_inertialFrame)
+    u_inertialFrame(:,i) = quatRotation(q_bodyFrame(i,:),u_sensorFrame(i,:));
+end
+
+[~, u_uniform] = setSampleTime(measured.t,u_inertialFrame',dt);
 
 %% 2. Represent the estimation data as an |iddata| object. 
-y = x_uniform;
-u = u_uniform;
+y = x_uniform(450:end,:);
+u = u_uniform(450:end,:);
 
 z = iddata(y, u, dt, 'Name', 'ADCS-module');
 %%
 % 3. Specify input and output signal names, start time and time units. 
 z.InputName = {'Torque_x','Torque_y','Torque_z'};
 z.InputUnit =  {'Nm','Nm','Nm'};
-z.OutputName = {'q0', 'q1', 'q2', 'q3', 'ang Rate x', 'ang Rate y', 'ang Rate z'};
-z.OutputUnit = {'-', '-', '-', '-', 'rad/s' ,'rad/s', 'rad/s'};
+z.OutputName = {'ang Rate x', 'ang Rate y', 'ang Rate z'};
+z.OutputUnit = {'rad/s' ,'rad/s', 'rad/s'};
 z.Tstart = 0;
 z.TimeUnit = 's';
 
 % 4. Plot the data.
-%
-% The data is shown in two plot windows.
-figure('Name', [z.Name ': Torque input -> sat quat']);
-plot(z(:, 1:4, 1:3)); grid on;  % Plot first input-output pair (t -> q).
-
 % The data is shown in two plot windows.
 figure('Name', [z.Name ': Torque input -> sat ang rates']);
-plot(z(:, 5:7, 1:3)); grid on;  % Plot first input-output pair (t -> q).
+plot(z(:, 1:3, 1:3)); grid on;  % Plot first input-output pair (t -> q).
 
 %% 2. Represent the satellite dynamics using an |idnlgrey| object.
 %
 % The model describes how the inputs generate the outputs using the state
 % equation(s).
 FileName      = 'adcsModuleModel';       % File describing the model structure.
-Order         = [7 3 7];           % Model orders [ny nu nx].
+Order         = [3 3 3];           % Model orders [ny nu nx].
 Parameters    = initial';          % Initial parameters. Np = 11.
-InitialStates = [-0.9999,-0.0045,-0.0103,0.0098,...
-                  0.0100,-0.0300,-0.0300]';            % Initial initial states.
+InitialStates = [0.0187, 0.0298, 0.0374]';            % Initial initial states.
 Ts            = 0;                 % Time-continuous system.
+%Ts             = dt;
 nlgr = idnlgrey(FileName, Order, Parameters, InitialStates, Ts, ...
                 'Name', 'ADCS-module');
+set(nlgr,'FileArgument',{q_in,t_in});
 %%
 %
 % 3. Specify input and output names, and units.
 set(nlgr, 'InputName', {'Torque_x','Torque_y','Torque_z'}, ...
-          'InputUnit', {'Nm','Nm','Nm'},               ...
-          'OutputName', {'q0', 'q1', 'q2', 'q3', 'ang Rate x', 'ang Rate y', 'ang Rate z'}, ...
-          'OutputUnit', {'-', '-', '-', '-', 'rad/s' ,'rad/s', 'rad/s'},                         ...
+          'InputUnit', {'Nm','Nm','Nm'},...
+          'OutputName', {'ang Rate x', 'ang Rate y', 'ang Rate z'}, ...
+          'OutputUnit', {'rad/s' ,'rad/s', 'rad/s'},...
           'TimeUnit', 's');
 
 %%
 % 
 % 4. Specify names and units of the initial states and parameters.
-nlgr = setinit(nlgr, 'Name',  {'q0', 'q1', 'q2', 'q3', 'ang Rate x', 'ang Rate y', 'ang Rate z'});
-nlgr = setinit(nlgr, 'Unit', {'-', '-', '-', '-', 'rad/s' ,'rad/s', 'rad/s'});
+nlgr = setinit(nlgr, 'Name',  {'ang Rate x', 'ang Rate y', 'ang Rate z'});
+nlgr = setinit(nlgr, 'Unit', {'rad/s' ,'rad/s', 'rad/s'});
 
 nlgr = setpar(nlgr, 'Name', {'J_11','J_22','J_33','J_12','J_13','J_23','cx','cy','cz','m_sat','alpha','miss_x','miss_y','miss_z'});
 nlgr = setpar(nlgr, 'Unit', {'kg⋅m²','kg⋅m²','kg⋅m²','kg⋅m²','kg⋅m²','kg⋅m²','m','m','m','kg','-','Nm','Nm','Nm'});
@@ -118,15 +143,15 @@ size(nlgr)
 % |help idnlgrey.InitialStates| and |help idnlgrey.Parameters| for
 % more information.
 nlgr.Parameters(1).Minimum = eps(0);
-nlgr.Parameters(1).Maximum = 1E-2;
+nlgr.Parameters(1).Maximum = Inf;
 nlgr.Parameters(1)
 
 nlgr.Parameters(2).Minimum = eps(0);
-nlgr.Parameters(2).Maximum = 1E-2;
+nlgr.Parameters(2).Maximum = Inf;
 nlgr.Parameters(2)
 
 nlgr.Parameters(3).Minimum = eps(0);
-nlgr.Parameters(3).Maximum = 1E-2;
+nlgr.Parameters(3).Maximum = Inf;
 nlgr.Parameters(3)
 
 nlgr.Parameters(4).Minimum = -1E-3;
@@ -225,9 +250,10 @@ compare(z, nlgr);
 % prediction error minimization method for nonlinear grey box models. The
 % estimation options, such as the choice of estimation progress display,
 % are specified using the "nlgreyestOptions" option set.
-nlgr = setinit(nlgr, 'Fixed', {false false false false false false false}); % Estimate the initial states.
+nlgr = setinit(nlgr, 'Fixed', {false false false}); % Estimate the initial states.
 opt = nlgreyestOptions('Display', 'on');
-opt.SearchOptions.Advanced.UseParallel = 'on';
+%opt.SearchOptions.Advanced.UseParallel = 'on';
+%opt.Display = 'on';
 nlgr = nlgreyest(z, nlgr, opt);
 
 %% Performance Evaluation of the Estimated DC-Motor Model
@@ -240,6 +266,14 @@ nlgr = nlgreyest(z, nlgr, opt);
 nlgr.Report
 fprintf('\n\nThe search termination condition:\n')
 nlgr.Report.Termination
+
+%%
+% 2. Evaluate the model quality by comparing simulated and measured
+% outputs.
+% 
+% The fits are 98% and 84%, which indicate that the estimated model
+% captures the dynamics of the DC motor well.
+compare(z, nlgr);
 % % % % %% Plot measured data
 % % % % figure()
 % % % % sp1 = subplot(3,1,1);

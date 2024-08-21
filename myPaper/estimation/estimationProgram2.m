@@ -27,28 +27,28 @@ initial(3) = 0.097785883899461;
 %initial(4)=-0.000682426613639;
 %initial(5)=0.000864367715638;
 %initial(6)=0.000991821289062;
-initial(4) =  0.005766523436438;
+initial(4) =  0.000720683076672;
 initial(5) = -0.004991779490391;
 initial(6) = -0.008665462907103;
 
 %%%Gravity center offset
-initial(7:9)= [0.099003774183598, -0.001000000000000, -0.000823642439759];
+initial(7:9)= [0.056625804154980, -0.001000000000000, -0.000823642439759];
 
 %%%Unmodeled 
 initial(10)  = 0.01;
-initial(11:13)  = [0.000100000000000,0.000100000000000,0.000100000000000];
+initial(11:13)  = [-0.009887425098015, 0.009893183003803,0.000100000000000];
 lb = [0, 0, 0, -1E-2, -1E-2, -1E-2,...
       -1E-1, -1E-1, -1E-1,...
       0,...
-      -Inf, -Inf, -Inf]; % lower bound
+      -1E-2, -1E-2, -1E-2]; % lower bound
 up = [1E-1, 1E-1, 1E-1, 1E-2, 1E-2, 1E-2, ...
       1E-1, 1E-1, 1E-1,...
       1E-2, ...
-      Inf, Inf, Inf]; % high bound
+      1E-2, 1E-2, 1E-2]; % high bound
 
 %GA OPTIONS
 %try
-ga_opt = gaoptimset('Display','off','Generations',50,'PopulationSize',100, ...
+ga_opt = gaoptimset('Display','off','Generations',10,'PopulationSize',100, ...
     'InitialPopulation',initial,'PlotFcns',@gaplotbestf);
 obj_fun = @(k_est)costFunction1(k_est);
 
