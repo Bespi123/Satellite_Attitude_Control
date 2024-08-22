@@ -288,7 +288,7 @@ compare(z, nlgr);
 % estimation options, such as the choice of estimation progress display,
 % are specified using the "nlgreyestOptions" option set.
 %nlgr = setinit(nlgr, 'Fixed', {false false false false false false false}); % Estimate the initial states.
-nlgr = setinit(nlgr, 'Fixed', {false false false}); % Estimate the initial states.
+nlgr = setinit(nlgr, 'Fixed', {false false false false false false false}); % Estimate the initial states.
 opt = nlgreyestOptions('Display', 'on');
 %opt.SearchOptions.Advanced.UseParallel = 'on';
 %opt.Display = 'on';
