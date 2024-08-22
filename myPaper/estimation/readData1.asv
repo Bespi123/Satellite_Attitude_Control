@@ -80,9 +80,9 @@ t_in = 0:dt:dt*(length(u_uniform)-1);
 %[~, u_uniform] = setSampleTime(measured.t,u_inertialFrame',dt);
 
 %% 2. Represent the estimation data as an |iddata| object. 
-y = x_uniform(:,5:7);
+y = x_uniform(:,:);
 u = u_uniform;
-w_rw_command = (27E-6)\cumtrapz(t_in, u);
+w_rw_command = (25E-6)\cumtrapz(t_in, u);
 
 %%% Calcular vol_set
 vol_set = ((((9.55 * w_rw_command) - 20) / (4555 - 20)) * 4.9) + 0.1;
@@ -102,15 +102,20 @@ z = iddata(y, u_real, dt, 'Name', 'ADCS-module');
 % 3. Specify input and output signal names, start time and time units. 
 z.InputName = {'Torque_x','Torque_y','Torque_z'};
 z.InputUnit =  {'Nm','Nm','Nm'};
-z.OutputName = {'ang Rate x', 'ang Rate y', 'ang Rate z'};
-z.OutputUnit = {'rad/s' ,'rad/s', 'rad/s'};
+z.OutputName = {'q_0','q_1','q_2','q_3','ang Rate x', 'ang Rate y', 'ang Rate z'};
+z.OutputUnit = {'-','-','-','-','rad/s' ,'rad/s', 'rad/s'};
 z.Tstart = 0;
 z.TimeUnit = 's';
 
 % 4. Plot the data.
 % The data is shown in two plot windows.
+figure('Name', [z.Name ': Torque input -> sat quaternions']);
+plot(z(:, 1:4, 1:3)); grid on;  % Plot first input-output pair (t -> q).
+
+% 5. Plot the data.
+% The data is shown in two plot windows.
 figure('Name', [z.Name ': Torque input -> sat ang rates']);
-plot(z(:, :, :)); grid on;  % Plot first input-output pair (t -> q).
+plot(z(:, 5:7, 1:3)); grid on;  % Plot first input-output pair (t -> q).
 
 
 %% 2. Represent the satellite dynamics using an |idnlgrey| object.
@@ -118,7 +123,7 @@ plot(z(:, :, :)); grid on;  % Plot first input-output pair (t -> q).
 % The model describes how the inputs generate the outputs using the state
 % equation(s).
 FileName      = 'adcsModuleModel';  % File describing the model structure.
-Order         = [3 3 7];            % Model orders [ny nu nx].
+Order         = [7 3 7];            % Model orders [ny nu nx].
 Parameters    = initial';           % Initial parameters. Np = 11.
 InitialStates = [0.0103, 0.0098, -0.9999, 0.0045,...
                  0.0187, 0.0298, 0.0374]';  % Initial initial states.
@@ -131,8 +136,10 @@ nlgr = idnlgrey(FileName, Order, Parameters, InitialStates, Ts, ...
 % 3. Specify input and output names, and units.
 set(nlgr, 'InputName', {'Torque_x','Torque_y','Torque_z'}, ...
           'InputUnit', {'Nm','Nm','Nm'},...
-          'OutputName', {'ang Rate x', 'ang Rate y', 'ang Rate z'}, ...
-          'OutputUnit', {'rad/s' ,'rad/s', 'rad/s'},...
+          'OutputName', {'q_0','q_1','q_2','q_3',...
+                 'ang Rate x', 'ang Rate y', 'ang Rate z'}, ...
+          'OutputUnit', {'-','-','-','-',...
+                         'rad/s' ,'rad/s', 'rad/s'},...
           'TimeUnit', 's');
 
 %%
