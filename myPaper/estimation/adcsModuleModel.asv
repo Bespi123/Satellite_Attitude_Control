@@ -145,27 +145,36 @@ function [dx,y] = adcsModuleModel(t,x,u,J_11,J_22,J_33,J_12,J_23,J_13,cx,cy,cz,m
     % Get disturbances in body frame
     w_inertia = quatRotation(q,w); %get w in the inertial frame
     T_air_inertia = [0,0,alpha*w_inertia(3)]';
-    T_air_body = quatRotation(quatconj(q'),T_air_inertia);
-    T_gg_body  = T_disturbances(m_sat,cg,q);
-    Td_body = T_gg_body-T_air_body+miscellaneous-u'; 
-
-    %------------------------Ecuaciones cinematica y dinamica------------------
-    %Libro: Fundamentals of Spacecraft Attitude Determination and Control
-    %Autor: F. Landis Markley & John L. Crassidis
-    %Cinemática de cuaternos..Ecuación (2.88 modificada)
-    %Cinemática de cuaternos..Ecuación (2.88)
-    Xi=[-q(2),-q(3),-q(4);
-         q(1),-q(4),q(3);
-         q(4),q(1),-q(2);
-        -q(3),q(2),q(1)]; 
-    x1_dot=1/2*Xi*w;                   %Ecuacion cinematica (3.21)
-    x2_dot=J_body\(Td_body-cross(w,J_body*w));      %Ecuación dinámica (3.147)
-
+    T_air_body = quatRotation(quatconj(q),T_air_inertia);
+    T_gg_body  = T_disturbances_inertial(m_sat,cg,q_act);
+    Td_body = T_gg_body-T_air_body+miscellaneous+u'; 
+  
+    %%%Final
+    w_dot_inertia = J_inertial\(Td_inertia);
+    
     %x_dot vector
-    dx=[x1_dot;x2_dot];
+    dx = w_dot_inertia;
 
     %Output equation (Angular rate)
     y = x;
+
+    % %------------------------Ecuaciones cinematica y dinamica------------------
+    % %Libro: Fundamentals of Spacecraft Attitude Determination and Control
+    % %Autor: F. Landis Markley & John L. Crassidis
+    % %Cinemática de cuaternos..Ecuación (2.88 modificada)
+    % %Cinemática de cuaternos..Ecuación (2.88)
+    % Xi=[-q(2),-q(3),-q(4);
+    %      q(1),-q(4),q(3);
+    %      q(4),q(1),-q(2);
+    %     -q(3),q(2),q(1)]; 
+    % x1_dot=1/2*Xi*w;                   %Ecuacion cinematica (3.21)
+    % x2_dot=J\(Td+u'-cross(w,J*w));      %Ecuación dinámica (3.147)
+    % 
+    % %x_dot vector
+    % dx=[x1_dot;x2_dot];
+    % 
+    % %Output equation (Angular rate)
+    % y = x;
 end
 
 function [ Tgg ] = T_disturbances(Ms,R_cm,q)
