@@ -148,6 +148,8 @@ function [dx,y] = adcsModuleModel(t,x,u,J_11,J_22,J_33,J_12,J_23,J_13,cx,cy,cz,m
     T_air_body = quatRotation(quatconj(q'),T_air_inertia);
     T_gg_body  = T_disturbances(m_sat,cg,q);
     Td_body = T_gg_body-T_air_body+miscellaneous-u'; 
+    %Td_body = T_gg_body-T_air_body-u'; 
+
 
     %------------------------Ecuaciones cinematica y dinamica------------------
     %Libro: Fundamentals of Spacecraft Attitude Determination and Control
@@ -165,7 +167,7 @@ function [dx,y] = adcsModuleModel(t,x,u,J_11,J_22,J_33,J_12,J_23,J_13,cx,cy,cz,m
     dx=[x1_dot;x2_dot];
 
     %Output equation (Angular rate)
-    y = x;
+    y = x(5:7);
 end
 
 function [ Tgg ] = T_disturbances(Ms,R_cm,q)

@@ -33,6 +33,8 @@ disp(data(1:5, :));
 measured.t = data.t; 
 
 %%% Measured data respect to sensor frame
+%%% Test
+
 q_sensorFrame = angle2quat(deg2rad(data.Yaw),deg2rad(data.Pitch),deg2rad(data.Roll),'ZXY');
 w_sensorFrame = [data.Ang_vel_x, data.Ang_vel_y, data.Ang_vel_z]';
 u_bodyFrame   = [zeros(length(data.u_z_),2),data.u_z_];
@@ -58,11 +60,8 @@ measured.u = u_bodyFrame;
 [t_uniform, x_uniform] = setSampleTime(measured.t,measured.x,dt);
 [~, q_uniform] = setSampleTime(measured.t,q_bodyFrame,dt);
 [~, u_uniform] = setSampleTime(measured.t,measured.u,dt);
-zq_in = q_uniform(450:end,:);
+q_in = q_uniform(450:end,:);
 t_in = 0:dt:dt*(length(q_in)-1);
-
-%%% Recover real torque
-
 
 %%% Measured data respect to inertial Frame
 %u_inertialFrame = zeros(3,length(u_sensorFrame));
@@ -74,7 +73,7 @@ t_in = 0:dt:dt*(length(q_in)-1);
 %% 2. Represent the estimation data as an |iddata| object. 
 y = x_uniform(450:end,:);
 u = u_uniform(450:end,:);
-w_rw_command = 3.540\cumtrapz(t_in, u);
+w_rw_command = (3.540E-3)\cumtrapz(t_in, u);
 
 %%% Calcular vol_set
 vol_set = ((((9.55 * w_rw_command) - 20) / (4555 - 20)) * 4.9) + 0.1;
@@ -88,54 +87,69 @@ u_real = 27E-6*diff(w_rw_command)./diff(repmat(t_in,3,1)');
 %u_real = [zeros(1,3);u_real];
 u_real = [u_real(1,:);u_real];
 
-z = iddata(y, u_real, dt, 'Name', 'ADCS-module');
+%z = iddata(y, u_real, dt, 'Name', 'ADCS-module');
+z = iddata(y(:,5:7), u_real, dt, 'Name', 'ADCS-module'); %%Only ang rate
 %%
 % 3. Specify input and output signal names, start time and time units. 
-z.InputName = {'Torque_x','Torque_y','Torque_z'};
-z.InputUnit =  {'Nm','Nm','Nm'};
-z.OutputName = {'q_0','q_1','q_2','q_3','ang Rate x', 'ang Rate y', 'ang Rate z'};
-z.OutputUnit = {'-','-','-','-','rad/s' ,'rad/s', 'rad/s'};
+z.InputName  = {'Torque_x','Torque_y','Torque_z'};
+z.InputUnit  =  {'Nm','Nm','Nm'};
+%z.OutputName = {'q_0','q_1','q_2','q_3','ang Rate x', 'ang Rate y', 'ang Rate z'};
+%z.OutputUnit = {'-','-','-','-','rad/s' ,'rad/s', 'rad/s'};
+z.OutputName = {'ang Rate x', 'ang Rate y', 'ang Rate z'};
+z.OutputUnit = {'rad/s' ,'rad/s', 'rad/s'};
 z.Tstart = 0;
 z.TimeUnit = 's';
 
+% % 4. Plot the data.
+% % The data is shown in two plot windows.
+% figure('Name', [z.Name ': Torque input -> sat quaternions']);
+% plot(z(:, 1:4, 1:3)); grid on;  % Plot first input-output pair (t -> q).
+% 
+% % 5. Plot the data.
+% % The data is shown in two plot windows.
+% figure('Name', [z.Name ': Torque input -> sat ang rates']);
+% plot(z(:, 5:7, 1:3)); grid on;  % Plot first input-output pair (t -> q).
+
 % 4. Plot the data.
 % The data is shown in two plot windows.
-figure('Name', [z.Name ': Torque input -> sat quaternions']);
-plot(z(:, 1:4, 1:3)); grid on;  % Plot first input-output pair (t -> q).
-
-% 5. Plot the data.
-% The data is shown in two plot windows.
 figure('Name', [z.Name ': Torque input -> sat ang rates']);
-plot(z(:, 5:7, 1:3)); grid on;  % Plot first input-output pair (t -> q).
-
+plot(z(:, :, 1:3)); grid on;  % Plot first input-output pair (t -> q).
 
 %% 2. Represent the satellite dynamics using an |idnlgrey| object.
 %
 % The model describes how the inputs generate the outputs using the state
 % equation(s).
 FileName      = 'adcsModuleModel';  % File describing the model structure.
-Order         = [7 3 7];            % Model orders [ny nu nx].
+%Order         = [7 3 7];            % Model orders [ny nu nx].
+Order         = [3 3 3];            % Model orders [ny nu nx].
 Parameters    = initial';           % Initial parameters. Np = 11.
-InitialStates = [0.0103, 0.0098, -0.9999, 0.0045,...
-                 0.0187, 0.0298, 0.0374]';  % Initial initial states.
+%InitialStates = [0.0103, 0.0098, -0.9999, 0.0045,...
+%                 0.0187, 0.0298, 0.0374]';  % Initial initial states.
+InitialStates = [0.0187, 0.0298, 0.0374]';  % Initial initial states.
 Ts            = 0;                          % Time-continuous system.
 nlgr = idnlgrey(FileName, Order, Parameters, InitialStates, Ts, ...
-                'Name', 'ADCS-module');     % Gray 
+                'Name', 'ADCS-module');     % Gray box
 
 %%
 %
 % 3. Specify input and output names, and units.
 set(nlgr, 'InputName', {'Torque_x','Torque_y','Torque_z'}, ...
           'InputUnit', {'Nm','Nm','Nm'},...
-          'OutputName', {'ang Rate x', 'ang Rate y', 'ang Rate z'}, ...
-          'OutputUnit', {'rad/s' ,'rad/s', 'rad/s'},...
+          %'OutputName', {'q_0','q_1','q_2','q_3',...
+          %       'ang Rate x', 'ang Rate y', 'ang Rate z'}, ...
+          'OutputName', {'q_0','q_1','q_2','q_3',...
+                 'ang Rate x', 'ang Rate y', 'ang Rate z'}, ...
+          'OutputUnit', {'-','-','-','-',...
+                         'rad/s' ,'rad/s', 'rad/s'},...
           'TimeUnit', 's');
 
 %%
 % 
 % 4. Specify names and units of the initial states and parameters.
-nlgr = setinit(nlgr, 'Name',  {'ang Rate x', 'ang Rate y', 'ang Rate z'});
-nlgr = setinit(nlgr, 'Unit', {'rad/s' ,'rad/s', 'rad/s'});
+nlgr = setinit(nlgr, 'Name',  {'q_0','q_1','q_2','q_3',...
+               'ang Rate x', 'ang Rate y', 'ang Rate z'});
+nlgr = setinit(nlgr, 'Unit', {'-','-','-','-',...
+                               'rad/s' ,'rad/s', 'rad/s'});
 
 nlgr = setpar(nlgr, 'Name', {'J_11','J_22','J_33','J_12','J_13','J_23','cx','cy','cz','m_sat','alpha','miss_x','miss_y','miss_z'});
 nlgr = setpar(nlgr, 'Unit', {'kg⋅m²','kg⋅m²','kg⋅m²','kg⋅m²','kg⋅m²','kg⋅m²','m','m','m','kg','-','Nm','Nm','Nm'});
@@ -268,7 +282,7 @@ compare(z, nlgr);
 % prediction error minimization method for nonlinear grey box models. The
 % estimation options, such as the choice of estimation progress display,
 % are specified using the "nlgreyestOptions" option set.
-nlgr = setinit(nlgr, 'Fixed', {false false false}); % Estimate the initial states.
+nlgr = setinit(nlgr, 'Fixed', {false false false false false false false}); % Estimate the initial states.
 opt = nlgreyestOptions('Display', 'on');
 %opt.SearchOptions.Advanced.UseParallel = 'on';
 %opt.Display = 'on';
@@ -351,4 +365,17 @@ function [ t_uniform, x_uniform] = setSampleTime(tout,data,t_sample)
     t_uniform = tout(1):t_sample:tout(end); %%Define a uniform time vector
     %%% Start interpolation
     x_uniform = interp1(tout, data, t_uniform, 'spline');  % Interpolación
+end
+
+function q_dot = kinematicEq(t, q, w)
+%------------------------Ecuaciones cinematica------------------
+%Libro: Fundamentals of Spacecraft Attitude Determination and Control
+%Autor: F. Landis Markley & John L. Crassidis
+%Cinemática de cuaternos..Ecuación (2.88 modificada)
+%Cinemática de cuaternos..Ecuación (2.88)
+Xi=[-q(2),-q(3),-q(4);
+     q(1),-q(4),q(3);
+     q(4),q(1),-q(2);
+    -q(3),q(2),q(1)]; 
+q_dot=1/2*Xi*w;                   %Ecuacion cinematica (3.21)
 end
