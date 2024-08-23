@@ -1,18 +1,32 @@
 %%% Nominal motor values
-init.J_11 = 3.084E-3;
-init.J_22 = 3.132E-3;
-init.J_33 = 3.540E-3;
-init.J_12 = 0.082E-3;
-init.J_23 = 0.016E-3;
-init.J_13 = -0.054E-3;
-init.cx   = 0; %m
-init.cy   = 0; %m
-init.cz   = 0; %m
+% init.J_11 = 3.084E-3;
+% init.J_22 = 3.132E-3;
+% init.J_33 = 3.540E-3;
+% init.J_12 = 0.082E-3;
+% init.J_23 = 0.016E-3;
+% init.J_13 = -0.054E-3;
+% init.cx   = 0; %m
+% init.cy   = 0; %m
+% init.cz   = 0; %m
+% init.m_sat = 1.317; %kg
+% init.alpha = 0;  
+% init.miss_x = 0; 
+% init.miss_y = 0;
+% init.miss_z = 0;
+init.J_11 = 0.003351651908532;
+init.J_22 = 0.002910425765837;
+init.J_33 = 0.003930855187051;
+init.J_12 = 4.884184006249866e-06;
+init.J_23 = 2.560250224819577e-05;
+init.J_13 = -3.371655548685244e-05;
+init.cx   = -1.402885514523180e-06; %m
+init.cy   = -2.661906340358798e-06; %m
+init.cz   =  2.397039443720151e-07; %m
 init.m_sat = 1.317; %kg
-init.alpha = 0;  
-init.miss_x = 0; 
-init.miss_y = 0;
-init.miss_z = 0;
+init.alpha = 4.848393490188730e-06;  
+init.miss_x = 2.605018852742383e-05; 
+init.miss_y = -1.536704470953186e-05;
+init.miss_z = 2.364868575802788e-05;
 initial = cell2mat(struct2cell(init));
 
 %%% Misaligment between the sensor and body frame

@@ -1,18 +1,32 @@
 %%% Nominal motor values
-init.J_11 = 3.084E-3;
-init.J_22 = 3.132E-3;
-init.J_33 = 3.540E-3;
-init.J_12 = 0.082E-3;
-init.J_23 = 0.016E-3;
-init.J_13 = -0.054E-3;
-init.cx   = 0; %m
-init.cy   = 0; %m
-init.cz   = 0; %m
+% init.J_11 = 3.084E-3;
+% init.J_22 = 3.132E-3;
+% init.J_33 = 3.540E-3;
+% init.J_12 = 0.082E-3;
+% init.J_23 = 0.016E-3;
+% init.J_13 = -0.054E-3;
+% init.cx   = 0; %m
+% init.cy   = 0; %m
+% init.cz   = 0; %m
+% init.m_sat = 1.317; %kg
+% init.alpha = 0;  
+% init.miss_x = 0; 
+% init.miss_y = 0;
+% init.miss_z = 0;
+init.J_11 = 0.002919747401615;
+init.J_22 = 0.003030605233304;
+init.J_33 = 0.003463346414198;
+init.J_12 = 6.903408533188974e-05;
+init.J_23 = 6.233105420652359e-06;
+init.J_13 = -4.986517963993673e-05;
+init.cx   = -1.735845021060009e-06; %m
+init.cy   = -4.078073451588903e-06; %m
+init.cz   = -3.577112115278254e-08; %m
 init.m_sat = 1.317; %kg
-init.alpha = 0;  
-init.miss_x = 0; 
-init.miss_y = 0;
-init.miss_z = 0;
+init.alpha = 2.639699878603888e-05;  
+init.miss_x = -1.497259477067737e-05; 
+init.miss_y = 9.222573952051968e-07;
+init.miss_z = -1.935346410142112e-05;
 initial = cell2mat(struct2cell(init));
 
 %%% Misaligment between the sensor and body frame
@@ -293,6 +307,7 @@ opt = nlgreyestOptions('Display', 'on');
 %opt.SearchOptions.Advanced.UseParallel = 'on';
 %opt.Display = 'on';
 nlgr = nlgreyest(z, nlgr, opt);
+opt.SearchOptions.MaxIterations = 100;
 
 %% Performance Evaluation of the Estimated DC-Motor Model
 % 1. Review the information about the estimation process.
