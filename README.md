@@ -37,12 +37,15 @@ The study compares these control laws based on several metrics:
 2. Open MATLAB and navigate to the project directory.
 
 ## Usage
-To run the simulations, execute the MATLAB script:
+To run the simulations for regulation attitude maneuvers, execute the MATLAB script without adding the folder called Simulink into the MATLAB path:
 
 ```matlab
-run('your_main_script.m')
+run('Simulacion_regulation.m')
 ```
-
+The following command will run the attitude-tracking maneuvers:
+```matlab
+run('Simulation_tracking.m')
+```
 This will perform attitude control simulations using the different control laws and generate performance plots.
 
 ## Control Laws
