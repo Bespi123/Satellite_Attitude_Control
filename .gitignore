@@ -1,24 +1,37 @@
+# MATLAB specific files
+*.asv
+*.fig
+*.mlx
+*.mat
+*.mex*
+*.mlappinstall
+*.mltbx
+*.slxc
+*.mdl
+*.xvc
 
-Playground/.jxbrowser-data/Cache/index
-Playground/.jxbrowser-data/Cache/index
-Playground/.jxbrowser-data/GPUCache/index
-Playground/.jxbrowser-data/Cache/data_0
-Simulation/MRAC_lin/MRAC_function.slx.r2015a
-Simulation/Scripts/Brushless model/ReactionWheel.slxc
-Simulation/Scripts/Brushless model/slprj/_sfprj/EMLReport/emlReportAccessInfo.mat
-Simulation/Scripts/Brushless model/slprj/_sfprj/EMLReport/swcSHzdl1SFb2QucHf2fAFF.mat
-Simulation/Scripts/Brushless model/slprj/_sfprj/ReactionWheel/_self/sfun/info/binfo.mat
-Simulation/Scripts/Brushless model/slprj/_sfprj/ReactionWheel/amsi_serial.mat
-Simulation/Scripts/Brushless model/slprj/sim/varcache/ReactionWheel/checksumOfCache.mat
-Simulation/Scripts/Brushless model/slprj/sim/varcache/ReactionWheel/tmwinternal/simulink_cache.xml
-Simulation/Scripts/Brushless model/slprj/sim/varcache/ReactionWheel/varInfo.mat
-Playground/Qcreator/build/.qmake.stash
-Playground/Qcreator/build/debug/mainwindow.o
-Playground/Qcreator/build/Makefile.Release
-Playground/Qcreator/build/debug/moc_mainwindow.cpp
-Playground/Qcreator/build/debug/moc_predefs.h
-Playground/Qcreator/build/debug/moc_mainwindow.o
-Playground/Qcreator/build/debug/RecordData.exe
-Playground/Qcreator/build/Makefile
-Playground/Qcreator/build/Makefile.Debug
-Playground/Qcreator/build/ui_mainwindow.h
+# MATLAB backup files
+*~ 
+*.bak
+
+# Simulink autosave files
+slprj/
+sfunctbl/
+*_autosave.slx
+
+# MATLAB code generation files
+codegen/
+*.mexw32
+*.mexw64
+*.mexglx
+*.mexmaci64
+
+# MATLAB project files
+.SimulinkProject/
+.slxproj
+.prj
+
+# Ignore personal settings and preferences files
+*.prm
+*.tmr
+*.tlc
