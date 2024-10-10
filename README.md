@@ -37,16 +37,23 @@ The study compares these control laws based on several metrics:
 2. Open MATLAB and navigate to the project directory.
 
 ## Usage
+### Scripts
 To run the simulations for regulation attitude maneuvers, execute the MATLAB script without adding the folder called Simulink into the MATLAB path:
 
 ```matlab
 run('Simulacion_regulation.m')
 ```
-The following command will run the attitude-tracking maneuvers:
+To run the simulations for tracking attitude maneuvers, execute the MATLAB script without adding the folder called Simulink into the MATLAB path:
 ```matlab
 run('Simulation_tracking.m')
 ```
 This will perform attitude control simulations using the different control laws and generate performance plots.
+
+### Simulink
+To run the simulations, execute the 'eqestate.slx' file without adding the Scrips folder into the MATLAB path.
+
+### Comparisson between Linear and non-linear model
+The graphs presented in the article 'Low-cost Test System for 1U CubeSat Attitude Control with Reaction Wheels' with DOI: 10.1109/ARGENCON55245.2022.9940099. Specifically on Fig. 3 can be obtained by running 'Comparison.slx'.
 
 ## Control Laws
 The following control laws are implemented and compared in this study:
