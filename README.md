@@ -53,7 +53,7 @@ This will perform attitude control simulations using the different control laws 
 To run the simulations, execute the 'eqestate.slx' file without adding the Scrips folder into the MATLAB path.
 
 ### Comparisson between Linear and non-linear model
-The graphs presented in the article 'Low-cost Test System for 1U CubeSat Attitude Control with Reaction Wheels' with DOI: 10.1109/ARGENCON55245.2022.9940099. Specifically on Fig. 3 can be obtained by running 'Comparison.slx'.
+The graphs presented in the article 'Low-cost Test System for 1U CubeSat Attitude Control with Reaction Wheels' with DOI: 10.1109/ARGENCON55245.2022.9940099. Specifically on Fig. 3 can be obtained by running 'Simulink\Linear_model\comparison\Comparison.slx'.
 
 ## Control Laws
 The following control laws are implemented and compared in this study:
