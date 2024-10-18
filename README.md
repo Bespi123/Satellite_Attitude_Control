@@ -73,6 +73,8 @@ The simulations include the following disturbances and configurations:
 3. **Average of Square of the Commanded Control Torque (ASCCT)**: Measure of the control effort.
 4. **Settlement Time (ts)**: Time taken for the system to reach a stable state within 5% of the desired orientation.
 
+### More information:
+For additional information please refer to report1.pdf and report2.pdf.
 ## Results
 The simulation results will output performance graphs for each control law, including:
 - **Euler angles** (roll, pitch, yaw)
