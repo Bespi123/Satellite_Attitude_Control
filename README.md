@@ -82,5 +82,9 @@ The simulation results will output performance graphs for each control law, incl
 
 The results are also compared based on the above metrics to identify the best control strategy for CubeSat attitude maneuvers.
 
-## License
-This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
+## Contact
+For any questions or contributions, feel free to contact:
+- **B. Espinoza-Garcia** at `bespinozag@unsa.edu.pe`
+- **P.R. Yanyachi** at `raulpab@unsa.edu.pe`
+
+This project was developed at the *Instituto de Investigación Astronómico y Aeroespacial Pedro Paulet*, Universidad Nacional de San Agustín de Arequipa.
